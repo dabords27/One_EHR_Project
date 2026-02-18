@@ -1,0 +1,7 @@
+{
+  "name": "One Document EHR",
+  "description": "A comprehensive hospital electronic record system by OneDocument Corporation, featuring advanced clinical encoding and administrative controls.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

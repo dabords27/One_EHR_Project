@@ -1,0 +1,84 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>One EHR - JKQMWC</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    /* System font: Modern Sans-Serif */
+    body {
+      font-family: 'Inter', sans-serif;
+    }
+    
+    /* Dedicated font for clinical forms as per client requirement */
+    .medical-font {
+      font-family: 'Calibri', 'Candara', 'Segoe UI', 'Optima', 'Arial', sans-serif;
+    }
+    
+    /* Custom Square Checkbox Styling */
+    .square-check {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 14px;
+      height: 14px;
+      border: 1.5px solid #334155;
+      background-color: transparent;
+      display: inline-block;
+      position: relative;
+      cursor: pointer;
+      border-radius: 0 !important;
+      flex-shrink: 0;
+    }
+
+    .square-check:checked {
+      background-color: #334155;
+    }
+
+    .square-check:checked::after {
+      content: '';
+      position: absolute;
+      left: 3px;
+      top: 0px;
+      width: 5px;
+      height: 8px;
+      border: solid white;
+      border-width: 0 2px 2px 0;
+      transform: rotate(45deg);
+    }
+
+    /* Print styles */
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+      body {
+        background: white !important;
+      }
+    }
+  </style>
+<script type="importmap">
+{
+  "imports": {
+    "recharts": "https://esm.sh/recharts@^3.7.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.563.0",
+    "react/": "https://esm.sh/react@^19.2.4/",
+    "react": "https://esm.sh/react@^19.2.4",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.4/",
+    "cors": "https://esm.sh/cors@^2.8.6",
+    "express": "https://esm.sh/express@^5.2.1",
+    "dotenv": "https://esm.sh/dotenv@^17.3.1",
+    "mysql2/": "https://esm.sh/mysql2@^3.17.1/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.41.0"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+<body class="bg-[#f8fafc] text-slate-800">
+  <div id="root"></div>
+<script type="module" src="/index.tsx"></script>
+</body>
+</html>
