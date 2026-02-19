@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import React, { useState, useEffect } from 'react';
 import {
   ArrowLeft,
@@ -33,31 +34,35 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ onBa
   const [txMsg, setTxMsg] = useState('');
   const [validationError, setValidationError] = useState('');
 
-  const [statusModal, setStatusModal] = useState<{
-    isOpen: boolean;
-    dept: DepartmentEntry | null;
-  }>({ isOpen: false, dept: null });
+const [statusModal, setStatusModal] = useState<{
+  isOpen: boolean;
+  dept: DepartmentEntry | null;
+  action: "activate" | "deactivate" | null;
+}>({ isOpen: false, dept: null, action: null });
+
 
   const [depts, setDepts] = useState<DepartmentEntry[]>([]);
 
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    status: 'Active' as 'Active' | 'Inactive'
+    status: 'Active' as 'Active' | 'Deactivated'
   });
 
   /* ================= FETCH ================= */
 
   const fetchDepartments = async () => {
     try {
-      const res = await fetch('http://localhost:5000/api/departments');
+      const res = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/departments`
+);
       const data = await res.json();
 
       const formatted: DepartmentEntry[] = data.map((d: any) => ({
         id: d.auto_id.toString(),
         name: d.dept_name,
         code: d.dept_code,
-        status: d.dept_status === 'active' ? 'Active' : 'Inactive'
+        status: d.dept_status_active ? 'Active' : 'Deactivated'
       }));
 
       setDepts(formatted);
@@ -76,29 +81,29 @@ const handleInputChange = (
   e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
 ) => {
   const { name, value } = e.target;
-  const upperValue = value.toUpperCase();
 
   setFormData(prev => ({
     ...prev,
-    [name]: upperValue
+    [name]:
+      name === "code" || name === "name"
+        ? value.toUpperCase()
+        : value   // DO NOT uppercase status
   }));
 
   // Duplicate code validation
-  if (name === 'code') {
+  if (name === "code") {
     const exists = depts.some(
       d =>
-        d.code.toUpperCase() === upperValue &&
+        d.code.toUpperCase() === value.toUpperCase() &&
         d.id !== editId
     );
 
-    if (exists) {
-      setValidationError('System Code already exists.');
-    } else {
-      setValidationError('');
-    }
+    setValidationError(
+      exists ? "System Code already exists." : ""
+    );
   }
 };
-    
+
 
   /* ================= SAVE ================= */
 
@@ -118,22 +123,22 @@ if (validationError) {
 
     try {
       if (editId) {
-        await fetch(`http://localhost:5000/api/departments/${editId}`, {
+        await fetch(`${import.meta.env.VITE_API_URL}/api/departments/${editId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             dept_name: formData.name,
-            dept_status: formData.status.toLowerCase()
+            dept_status_active: formData.status === 'Active'
           })
         });
       } else {
-        await fetch('http://localhost:5000/api/departments', {
+        await fetch(`${import.meta.env.VITE_API_URL}/api/departments`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             dept_code: formData.code,
             dept_name: formData.name,
-            dept_status: formData.status.toLowerCase()
+            dept_status_active: formData.status === 'Active'
           })
         });
       }
@@ -176,102 +181,115 @@ if (validationError) {
 
   /* ================= TOGGLE ================= */
 
-  const handleToggleStatus = async () => {
-    if (!statusModal.dept) return;
+const handleToggleStatus = async () => {
+  // 🔒 Safety check
+  if (!statusModal.dept || !statusModal.action) return;
 
-    const dept = statusModal.dept;
-    const newStatus = dept.status === 'Active' ? 'inactive' : 'active';
+  const dept = statusModal.dept;
 
-    setStatusModal({ isOpen: false, dept: null });
-    setTxStatus('loading');
-    setTxMsg(`Synchronizing ${newStatus === 'active' ? 'Activation' : 'Deactivation'} request...`);
+  // ✅ THIS is where it goes
+  const willActivate = statusModal.action === "activate";
 
-    const start = Date.now();
+  setTxStatus("loading");
+  setTxMsg(
+    `Synchronizing ${willActivate ? "Activation" : "Deactivation"} request...`
+  );
 
-    try {
-      await fetch(`http://localhost:5000/api/departments/${dept.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dept_name: dept.name,
-          dept_status: newStatus
-        })
-      });
+  try {
+    await fetch(`${import.meta.env.VITE_API_URL}/api/departments/${dept.id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        dept_name: dept.name,
+        dept_status_active: willActivate   // ✅ use it here
+      })
+    });
 
-      await fetchDepartments();
+    await fetchDepartments();
 
-      const elapsed = Date.now() - start;
-      if (elapsed < 1000) {
-        await new Promise(r => setTimeout(r, 1000 - elapsed));
-      }
+    setTxStatus("success");
+    setTxMsg(
+      `Station ${willActivate ? "activated" : "deactivated"} successfully.`
+    );
 
-      setTxStatus('success');
-      setTxMsg(`Station ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully.`);
-      setTimeout(() => setTxStatus('idle'), 1000);
+    // close modal AFTER success
+    setStatusModal({ isOpen: false, dept: null, action: null });
 
-    } catch (err) {
-      console.error(err);
-      setTxStatus('error');
-      setTxMsg('Status synchronization failed.');
-    }
-  };
+    setTimeout(() => setTxStatus("idle"), 1000);
 
+  } catch (err) {
+    console.error(err);
+    setTxStatus("error");
+    setTxMsg("Status synchronization failed.");
+  }
+};
   /* ================= UI ================= */
-
-  return (
+const handleSaveSubtitle = () => {
+  localStorage.setItem('dept_subtitle', subtitle);
+  setIsEditingSubtitle(false);
+};
+const [searchTerm, setSearchTerm] = useState(""); 
+ return (
     <div className="space-y-6 animate-in fade-in duration-500">
+{/* HEADER */}
+<div className="flex items-center justify-between">
 
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack}
-            className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-slate-800 rounded-xl shadow-sm">
-            <ArrowLeft size={20} />
-          </button>
+  {/* LEFT SIDE */}
+  <div className="flex items-center gap-4">
+    <button
+      onClick={onBack}
+      className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-slate-800 rounded-xl shadow-sm"
+    >
+      <ArrowLeft size={20} />
+    </button>
 
-          <div>
-            <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight leading-none mb-1">
-              Department Setup
-            </h2>
+    <div>
+      <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight leading-none mb-1">
+        Department Setup
+      </h2>
 
-            <div className="flex items-center gap-2 group">
-              {isEditingSubtitle ? (
-                <input
-                  type="text"
-                  value={subtitle}
-                  onChange={(e) => setSubtitle(e.target.value.toUpperCase())}
-                  onBlur={handleSaveSubtitle}
-                  autoFocus
-                  className="text-[10px] font-black text-emerald-600 border-b border-emerald-300 outline-none bg-emerald-50 px-1 uppercase tracking-widest"
-                />
-              ) : (
-                <>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    {subtitle}
-                  </p>
-                  <button onClick={() => setIsEditingSubtitle(true)}
-                    className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-emerald-500">
-                    <Edit3 size={10} />
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
+      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+        {subtitle}
+      </p>
+    </div>
+  </div>
 
-        {!showForm && (
-          <button
-            onClick={() => {
-              setEditId(null);
-              setFormData({ name: '', code: '', status: 'Active' });
-              setShowForm(true);
-            }}
-            className="px-6 py-2.5 bg-emerald-600 text-white font-black text-xs uppercase rounded-xl hover:bg-emerald-700 shadow-lg flex items-center gap-2"
-          >
-            <Plus size={16} /> Add Station
-          </button>
-        )}
+  {/* RIGHT SIDE */}
+  {!showForm && (
+    <div className="flex items-center gap-4">
+
+      {/* SEARCH */}
+      <div className="relative">
+        <Search
+          size={16}
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+        />
+        <input
+          type="text"
+          placeholder="Search Code, Name, Status..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10 pr-4 py-2.5 w-72 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-all"
+        />
       </div>
+
+      {/* ADD BUTTON */}
+      <button
+        onClick={() => {
+          setEditId(null);
+          setFormData({ name: '', code: '', status: 'Active' });
+          setShowForm(true);
+        }}
+        className="px-6 py-3 bg-slate-900 text-white font-black text-xs uppercase rounded-2xl hover:bg-black transition-all shadow-lg"
+      >
+<span className="font-extrabold text-sm mr-1 leading-none">+</span>
+  Add Department
+      </button>
+
+    </div>
+  )}
+
+</div>
 
       {/* FORM */}
       {showForm && (
@@ -312,6 +330,7 @@ if (validationError) {
                 name="name"
                 value={formData.name}
                 onChange={handleInputChange}
+				placeholder="E.G. INTENSIVE CARE UNIT"
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
               />
             </div>
@@ -327,7 +346,7 @@ if (validationError) {
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
               >
                 <option value="Active">ACTIVE</option>
-                <option value="Inactive">INACTIVE</option>
+                <option value="Deactivated">DEACTIVATED</option>
               </select>
             </div>
 
@@ -360,7 +379,7 @@ if (validationError) {
               <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-center w-32">Code</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Department Name</th>
               <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-center w-32">Status</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-right w-64">Actions</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] text-center w-64">Actions</th>
             </tr>
           </thead>
 
@@ -397,7 +416,15 @@ if (validationError) {
                     </button>
 
                     <button
-                      onClick={() => setStatusModal({ isOpen: true, dept })}
+onClick={() =>
+  setStatusModal({
+    isOpen: true,
+    dept,
+    action: dept.status === "Active"
+      ? "deactivate"
+      : "activate"
+  })
+}
                       className={`font-black text-[10px] uppercase flex items-center gap-1.5 ${
                         dept.status === 'Active'
                           ? 'text-rose-500 hover:text-rose-700'
@@ -419,14 +446,17 @@ if (validationError) {
 
       <TransactionOverlay status={txStatus} message={txMsg} onClose={() => setTxStatus('idle')} />
 
-      <StatusConfirmationModal
-        isOpen={statusModal.isOpen}
-        targetName={statusModal.dept?.name || ''}
-        isActivating={statusModal.dept?.status !== 'Active'}
-        title="Clinical Station"
-        onConfirm={handleToggleStatus}
-        onCancel={() => setStatusModal({ isOpen: false, dept: null })}
-      />
+<StatusConfirmationModal
+  isOpen={statusModal.isOpen}
+  targetName={statusModal.dept?.name || ""}
+  action={statusModal.action}
+  onConfirm={handleToggleStatus}
+  onCancel={() =>
+    setStatusModal({ isOpen: false, dept: null, action: null })
+  }
+/>
+
+
     </div>
   );
 };

@@ -38,14 +38,14 @@ const App: React.FC = () => {
     }
   }, []);
 
-  const handleLogin = (loggedInUser: User) => {
-    setUser(loggedInUser);
-    localStorage.setItem('dl_suite_user', JSON.stringify(loggedInUser));
-    
-    if (loggedInUser.defaultDepartment) {
-      handleSelectDepartment(loggedInUser.defaultDepartment as Department);
-    }
-  };
+const handleLogin = (loggedInUser: User) => {
+  setUser(loggedInUser);
+  localStorage.setItem('dl_suite_user', JSON.stringify(loggedInUser));
+
+  if (loggedInUser.defaultDepartment) {
+    handleSelectDepartment(loggedInUser.defaultDepartment as Department);
+  }
+};
 
   const handleSelectDepartment = (dept: Department) => {
     setDepartment(dept);

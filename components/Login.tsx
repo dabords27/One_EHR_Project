@@ -16,55 +16,53 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+const handleLogin = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setError('');
 
-    // First, check the "Staff Registry" in localStorage (from User Management)
-    const staffUsers = JSON.parse(localStorage.getItem('hospital_staff_users') || '[]');
-    const registeredUser = staffUsers.find((u: any) => 
-      u.username.toLowerCase() === username.toLowerCase()
-    );
-
-    if (registeredUser) {
-      if (registeredUser.password === password || password === 'admin') {
-        onLogin(registeredUser);
-        return;
-      }
+  try {
+    const res = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/auth/login`,
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ username, password })
+  }
+);
+    if (!res.ok) {
+      throw new Error("Invalid credentials");
     }
 
-    // Fallback to legacy hardcoded demo accounts if not found in registry
-    if (username === 'admin' && password === 'admin') {
-      onLogin({
-        id: '1',
-        username: 'admin',
-        fullName: 'Admin Supervisor',
-        role: UserRole.ADMIN,
-        departments: ['DELIVERY & LABOR SUITE', 'EMERGENCY ROOM', 'PEDIATRICS', 'SURGERY'],
-        defaultDepartment: 'DELIVERY & LABOR SUITE'
-      } as User);
-    } else if (username === 'nurse' && password === 'nurse') {
-      onLogin({
-        id: '2',
-        username: 'nurse',
-        fullName: 'Staff Nurse Maria',
-        role: UserRole.NURSE,
-        departments: ['DELIVERY & LABOR SUITE'],
-        defaultDepartment: 'DELIVERY & LABOR SUITE'
-      } as User);
-    } else if (username === 'doctor' && password === 'doctor') {
-      onLogin({
-        id: '3',
-        username: 'doctor',
-        fullName: 'Dr. John Smith',
-        role: UserRole.DOCTOR,
-        departments: ['DELIVERY & LABOR SUITE', 'SURGERY'],
-        defaultDepartment: 'DELIVERY & LABOR SUITE'
-      } as User);
-    } else {
-      setError('ACCESS DENIED: INVALID USER CREDENTIALS');
+    const user = await res.json();
+
+    // 🚫 Status validation
+    if (user.status?.toUpperCase() === "DEACTIVATED") {
+      setError("ACCOUNT DEACTIVATED. CONTACT SYSTEM ADMINISTRATOR.");
+      return;
     }
-  };
+
+    if (user.status?.toUpperCase() === "ON-HOLD") {
+      setError("ACCOUNT ON HOLD. CONTACT SYSTEM ADMINISTRATOR.");
+      return;
+    }
+
+    // ✅ Save user session
+    localStorage.setItem("ehr_user", JSON.stringify(user));
+
+    // ✅ Save active department (very important)
+    if (user.defaultDepartment) {
+      localStorage.setItem("activeDept", user.defaultDepartment);
+    }
+
+    onLogin(user);
+
+  } catch (err) {
+    setError("ACCESS DENIED: INVALID USER CREDENTIALS");
+  }
+};
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#020617] p-4 relative overflow-hidden">

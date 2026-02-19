@@ -1,4 +1,4 @@
-
+import { Search } from "lucide-react";
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   ArrowLeft, 
@@ -54,6 +54,13 @@ export const UserManagement: React.FC<UserManagementProps> = ({ onBack }) => {
   const [departments, setDepartments] = useState<DepartmentEntry[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [editId, setEditId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const colorMap: Record<string, string> = {
+    emerald: "bg-emerald-100 text-emerald-700",
+    blue: "bg-blue-100 text-blue-700",
+    orange: "bg-orange-100 text-orange-700"
+  };
+
   
   // Transaction State
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
@@ -230,24 +237,37 @@ const toggleDepartment = (deptCode: string) => {
       newErrors.doctorName = 'Associate Doctor is required for Doctor user type';
     }
 
-    if (!editId || (formData.password)) {
-      if (!editId || formData.password !== '') {
-         const passRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-         if (!passRegex.test(formData.password)) {
-           newErrors.password = 'Required: 8+ characters, uppercase, lowercase, number, and special character.';
-         }
-         if (formData.password !== formData.confirmPassword) {
-           newErrors.confirmPassword = 'Passwords do not match.';
-         }
-      }
-    }
+// Only validate password if creating OR if user typed a new password
+if (!editId) {
+  // Creating new user — password required
+  if (!formData.password) {
+    newErrors.password = 'Password is required.';
+  }
+}
+
+if (formData.password && formData.password.trim() !== '') {
+  const passRegex =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+
+  if (!passRegex.test(formData.password)) {
+    newErrors.password =
+      'Required: 8+ characters, uppercase, lowercase, number, and special character.';
+  }
+
+  if (formData.password !== formData.confirmPassword) {
+    newErrors.confirmPassword = 'Passwords do not match.';
+  }
+}
+
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 const fetchDepartments = async () => {
   try {
-    const res = await fetch("http://localhost:5000/api/departments");
+    const res = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/departments`
+);
     if (!res.ok) throw new Error("Failed to fetch departments");
 
     const data = await res.json();
@@ -272,13 +292,15 @@ const fetchDepartments = async () => {
 
 const fetchUsers = async () => {
   try {
-    const res = await fetch("http://localhost:5000/api/users");
+    const res = await fetch(
+  `${import.meta.env.VITE_API_URL}/api/users`
+)
     if (!res.ok) throw new Error("Failed to fetch users");
 
     const data = await res.json();
     if (!Array.isArray(data)) {
       setUsers([]);
-      return;
+     return;
     }
 
     const mapped = data.map((u: any) => ({
@@ -287,10 +309,11 @@ const fetchUsers = async () => {
       fullName: u.full_name || "",
       userGroup: u.fk_usr_group_code || "",
       userType: u.fk_usr_type_code || "",
-      status: u.usr_status || "",
-      defaultDepartment: u.department_name || "",
+      status: u.usr_status?.toUpperCase() || "",
+      defaultDepartment: u.default_department_name || "",
       departments: u.departments || [],
-      doctorName: u.doctor_name || ""
+      doctorName: u.doctor_name || "",
+	  groupColor: u.group_color || null,
     }));
 
     setUsers(mapped);
@@ -299,12 +322,25 @@ const fetchUsers = async () => {
     setUsers([]);
   }
 };
+const filteredUsers = users.filter((u: any) => {
+  const term = searchTerm.toLowerCase();
 
-  const handleSave = async () => {
+  return (
+    u.username?.toLowerCase().includes(term) ||
+    u.fullName?.toLowerCase().includes(term) ||
+    u.userGroup?.toLowerCase().includes(term) ||
+    u.status?.toLowerCase().includes(term)
+  );
+});
+
+
+ const handleSave = async () => {
   if (!validate()) return;
 
   setTxStatus('loading');
-  setTxMsg('Saving user profile...');
+  setTxMsg(editId ? 'Updating user profile...' : 'Saving user profile...');
+
+  const startTime = Date.now();
 
   try {
     const payload = {
@@ -320,12 +356,14 @@ const fetchUsers = async () => {
       usr_status: formData.status,
       departments: formData.departments,
       defaultDepartment: formData.defaultDepartment,
-      doctorName: formData.doctorName
+      doctorName: formData.doctorName,
+      profileImage: formData.profileImage,
+      eSignature: formData.eSignature
     };
 
-    const url = editId
-      ? `http://localhost:5000/api/users/${editId}`
-      : "http://localhost:5000/api/users";
+const url = editId
+  ? `${import.meta.env.VITE_API_URL}/api/users/${editId}`
+  : `${import.meta.env.VITE_API_URL}/api/users`;
 
     const res = await fetch(url, {
       method: editId ? "PUT" : "POST",
@@ -337,15 +375,22 @@ const fetchUsers = async () => {
 
     await fetchUsers();
 
-    setTxStatus('success');
-    setTxMsg('User successfully saved.');
+    // Ensure loading shows at least 700ms
+    const elapsed = Date.now() - startTime;
+    const remaining = Math.max(700 - elapsed, 0);
 
     setTimeout(() => {
-      setShowForm(false);
-      setEditId(null);
-      setFormData(initialFormState);
-      setTxStatus('idle');
-    }, 1000);
+      setTxStatus('success');
+      setTxMsg(editId ? 'User updated successfully.' : 'User saved successfully.');
+
+      setTimeout(() => {
+        setShowForm(false);
+        setEditId(null);
+        setFormData(initialFormState);
+        setTxStatus('idle');
+      }, 800);
+
+    }, remaining);
 
   } catch (err) {
     console.error(err);
@@ -355,88 +400,177 @@ const fetchUsers = async () => {
 };
 
 
-  const handleEdit = (user: any) => {
+
+
+ const handleEdit = async (user: any) => {
+  try {
+    const res = await fetch(`${import.meta.env.VITE_API_URL}/api/users/${user.id}`);
+    if (!res.ok) throw new Error("Failed to fetch user details");
+
+    const data = await res.json();
+
     setEditId(user.id);
-    setFormData({ 
-      ...initialFormState,
-      ...user, 
-      departments: user.departments || [], 
-      defaultDepartment: user.defaultDepartment || (user.departments?.[0] || ''),
-      password: '', 
-      confirmPassword: '' 
-    });
+
+    setFormData({
+  lastName: data.usr_last_name || '',
+  firstName: data.usr_first_name || '',
+  middleName: data.usr_middle_name || '',
+  extension: data.usr_extension || '',
+  username: data.usr_username || '',
+  customName: data.usr_custom_name || '',
+  email: data.usr_email || '',
+  userGroup: data.fk_usr_group_code,
+  userType: data.fk_usr_type_code,
+  status: data.usr_status,
+  defaultDepartment: data.defaultDepartment || '',
+  doctorName: data.usr_associate_doctor_name || '',
+  profileImage: data.usr_photo_path || null,
+  eSignature: data.usr_signature_path || null,
+  departments: data.departments || [],
+  password: '',
+  confirmPassword: ''
+});
+
+
     setShowForm(true);
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-  };
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to load user details.");
+  }
+};
 
 const handleToggleStatus = async () => {
   if (!statusModal.user) return;
 
   const user = statusModal.user;
-  const newStatus =
-    user.status === UserStatus.ACTIVE
-      ? UserStatus.DEACTIVATED
-      : UserStatus.ACTIVE;
 
-  setTxStatus('loading');
-  setTxMsg('Updating status...');
+  const isCurrentlyActive =
+    user.status?.toUpperCase() === "ACTIVE";
+
+  const newStatus = isCurrentlyActive
+    ? "DEACTIVATED"
+    : "ACTIVE";
+
+  setTxStatus("loading");
+  setTxMsg("Updating status...");
 
   try {
     const res = await fetch(
-      `http://localhost:5000/api/users/${user.id}/status`,
+      `${import.meta.env.VITE_API_URL}/api/users/${user.id}/status`,
       {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus })
-      }
+        body: JSON.stringify({
+          status: newStatus.toUpperCase(),
+        }),
+      } // ✅ THIS WAS MISSING
     );
 
     if (!res.ok) throw new Error("Status update failed");
 
     await fetchUsers();
 
-    setTxStatus('success');
-    setTxMsg('Status updated.');
-    setTimeout(() => setTxStatus('idle'), 800);
+    setTxStatus("success");
+    setTxMsg("Status updated.");
+    setTimeout(() => setTxStatus("idle"), 800);
 
   } catch (err) {
     console.error(err);
-    setTxStatus('error');
-    setTxMsg('Failed to update status.');
+    setTxStatus("error");
+    setTxMsg("Failed to update status.");
   }
 
   setStatusModal({ isOpen: false, user: null });
 };
+;
 
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <button onClick={onBack} className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-slate-800 rounded-xl transition-all shadow-sm">
-            <ArrowLeft size={20} />
-          </button>
-          <div>
-            <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight leading-none mb-1">User Management</h2>
-            <div className="flex items-center gap-2 group">
-              {isEditingSubtitle ? (
-                <div className="flex items-center gap-2">
-                  <input type="text" value={subtitle} onChange={(e) => setSubtitle(e.target.value.toUpperCase())} onBlur={handleSaveSubtitle} autoFocus className="text-[10px] font-black text-emerald-600 border-b border-emerald-300 outline-none bg-emerald-50 px-1 uppercase tracking-widest" />
-                </div>
-              ) : (
-                <>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{subtitle}</p>
-                  <button onClick={() => setIsEditingSubtitle(true)} className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-emerald-500 transition-all"><Edit3 size={10} /></button>
-                </>
-              )}
+<div className="space-y-6 animate-in fade-in duration-500">
+  <div className="flex items-center justify-between">
+    
+    {/* LEFT SIDE — BACK + TITLE + SUBTITLE */}
+    <div className="flex items-center gap-4">
+      <button
+        onClick={onBack}
+        className="p-2.5 bg-white border border-slate-200 text-slate-400 hover:text-slate-800 rounded-xl transition-all shadow-sm"
+      >
+        <ArrowLeft size={20} />
+      </button>
+
+      <div>
+        <h2 className="text-2xl font-black text-slate-800 uppercase tracking-tight leading-none mb-1">
+          User Management
+        </h2>
+
+        <div className="flex items-center gap-2 group">
+          {isEditingSubtitle ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={subtitle}
+                onChange={(e) =>
+                  setSubtitle(e.target.value.toUpperCase())
+                }
+                onBlur={handleSaveSubtitle}
+                autoFocus
+                className="text-[10px] font-black text-emerald-600 border-b border-emerald-300 outline-none bg-emerald-50 px-1 uppercase tracking-widest"
+              />
             </div>
-          </div>
+          ) : (
+            <>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                {subtitle}
+              </p>
+              <button
+                onClick={() => setIsEditingSubtitle(true)}
+                className="opacity-0 group-hover:opacity-100 p-1 text-slate-300 hover:text-emerald-500 transition-all"
+              >
+                <Edit3 size={10} />
+              </button>
+            </>
+          )}
         </div>
-        {!showForm && (
-          <button onClick={() => { setEditId(null); setFormData(initialFormState); setShowForm(true); setUsernameAutoGenerated(false); }} className="px-6 py-2.5 bg-slate-900 text-white font-black text-xs uppercase rounded-xl hover:bg-black transition-all shadow-lg flex items-center gap-2">Add New User</button>
-        )}
       </div>
+    </div>
+
+    {/* RIGHT SIDE — SEARCH + ADD BUTTON */}
+    {!showForm && (
+      <div className="flex items-center gap-4">
+        
+        {/* SEARCH INPUT */}
+        <div className="relative w-80">
+          <Search
+            size={16}
+            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+          />
+          <input
+            type="text"
+            placeholder="Search User, Name, Group..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-slate-100 border border-slate-200 rounded-2xl pl-12 pr-4 py-3 text-sm font-semibold tracking-wide text-slate-700 placeholder:text-slate-400 outline-none focus:ring-2 focus:ring-slate-300 transition-all"
+          />
+        </div>
+
+        {/* ADD BUTTON */}
+        <button
+          onClick={() => {
+            setEditId(null);
+            setFormData(initialFormState);
+            setShowForm(true);
+            setUsernameAutoGenerated(false);
+          }}
+          className="px-6 py-3 bg-slate-900 text-white font-black text-xs uppercase rounded-2xl hover:bg-black transition-all shadow-lg"
+        >
+<span className="font-extrabold text-sm mr-1 leading-none">+</span>
+  Add New User
+        </button>
+      </div>
+    )}
+  </div>
+
 
       {showForm ? (
         <div className="bg-white rounded-[32px] shadow-xl border border-slate-200 overflow-hidden animate-in slide-in-from-bottom-4 duration-500">
@@ -512,7 +646,7 @@ const handleToggleStatus = async () => {
                 <div className={`grid grid-cols-1 gap-2 p-3 bg-white border ${errors.departments ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'} rounded-xl max-h-[140px] overflow-y-auto transition-all`}>
                   {departments.map(d => (
                     <label key={d.id} className="flex items-center gap-3 cursor-pointer group">
-                      <div onClick={() => toggleDepartment(d.code)} className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${formData.departments.includes(d.name) ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300'}`}>
+                      <div onClick={() => toggleDepartment(d.code)} className={`w-5 h-5 rounded border flex items-center justify-center transition-all ${formData.departments.includes(d.code) ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-300'}`}>
                         {formData.departments.includes(d.code) && <Check size={12} strokeWidth={4} />}
                       </div>
                       <span className="text-[11px] font-bold text-slate-700 uppercase">{d.name}</span>
@@ -566,21 +700,34 @@ const handleToggleStatus = async () => {
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">Default Dept <Mandatory /></label>
-                <select 
-                  name="defaultDepartment" 
-                  value={formData.defaultDepartment} 
-                  onChange={handleInputChange} 
-                  className={`w-full bg-white border ${errors.defaultDepartment ? 'border-rose-400 ring-1 ring-rose-400' : 'border-slate-300'} rounded-xl px-4 py-2.5 text-sm font-bold uppercase transition-all outline-none focus:ring-2 focus:ring-sky-500/20`}
-                >
-                  <option value="">SELECT DEFAULT</option>
-                  {formData.departments.map(d => (
-                    <option key={d} value={d}>{d}</option>
-                  ))}
-                </select>
-                {errors.defaultDepartment && <p className="text-[10px] text-rose-500 font-bold mt-1 uppercase pl-1">{errors.defaultDepartment}</p>}
-              </div>
+<div className="space-y-1">
+  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+    Default Dept <Mandatory />
+  </label>
+
+  <select
+    name="defaultDepartment"
+    value={formData.defaultDepartment}
+    onChange={handleInputChange}
+    className={`w-full bg-white border ${
+      errors.defaultDepartment
+        ? 'border-rose-400 ring-1 ring-rose-400'
+        : 'border-slate-300'
+    } rounded-xl px-4 py-2.5 text-sm font-bold uppercase transition-all outline-none focus:ring-2 focus:ring-sky-500/20`}
+  >
+    <option value="">SELECT DEFAULT</option>
+
+    {formData.departments.map(code => {
+      const dept = departments.find(d => d.code === code);
+      return (
+        <option key={code} value={code}>
+          {dept ? dept.name : code}
+        </option>
+      );
+    })}
+  </select>
+</div>
+
 
               {/* Doctor Name Dropdown - Enabled only when user type is DOCTOR */}
               <div className="space-y-1 md:col-span-2">
@@ -657,87 +804,148 @@ const handleToggleStatus = async () => {
           </div>
         </div>
       ) : (
-        <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-center">Username</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Full Name</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Group</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {users.map((staff: any) => (
-                <tr key={staff.id} className="hover:bg-slate-50 transition-colors group">
-                  <td className="px-8 py-5 text-center"><span className="text-sm font-black text-slate-900 uppercase tracking-tight">{staff.username}</span></td>
-                  <td className="px-8 py-5">
-                    <div className="flex flex-col">
-                      <span className="font-black text-slate-700 text-sm uppercase">{staff.fullName}</span>
-                      {staff.defaultDepartment && (
-                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Home: {staff.defaultDepartment}</span>
-                      )}
-                      {staff.userType === UserType.DOCTOR && staff.doctorName && (
-                        <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight">Assoc: {staff.doctorName}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-8 py-5 text-center"><span className="px-3 py-1 bg-slate-900 text-white text-[9px] font-black rounded-full uppercase">{staff.userGroup}</span></td>
-                  <td className="px-8 py-5 text-center">
-                    <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${
-                      staff.status === UserStatus.ACTIVE 
-                        ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
-                        : 'bg-slate-100 text-slate-500 border border-slate-200'
-                    }`}>
-                      {staff.status || 'ACTIVE'}
-                    </span>
-                  </td>
-                  <td className="px-8 py-5 text-right">
-                    <div className="flex items-center justify-end gap-3">
-                      <button onClick={() => handleEdit(staff)} className="text-blue-600 hover:text-blue-800 font-bold text-[10px] uppercase flex items-center gap-1.5 transition-colors">
-                        <Edit2 size={14} /> Edit
-                      </button>
-                      <button 
-                        onClick={() => setStatusModal({ isOpen: true, user: staff })}
-                        className={`font-black text-[10px] uppercase flex items-center gap-1.5 transition-colors ${
-                          staff.status === UserStatus.ACTIVE 
-                            ? 'text-rose-500 hover:text-rose-700' 
-                            : 'text-emerald-600 hover:text-emerald-800'
-                        }`}
-                      >
-                        {staff.status === UserStatus.ACTIVE ? <ToggleLeft size={16} /> : <ToggleRight size={16} />}
-                        {staff.status === UserStatus.ACTIVE ? 'Deactivate' : 'Activate'}
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+  <>
 
-      <TransactionOverlay status={txStatus} message={txMsg} onClose={() => setTxStatus('idle')} />
-      
-      <StatusConfirmationModal 
-        isOpen={statusModal.isOpen}
-        targetName={statusModal.user?.fullName || ''}
-        isActivating={statusModal.user?.status !== UserStatus.ACTIVE}
-        title="Clinical User"
-        onConfirm={handleToggleStatus}
-        onCancel={() => setStatusModal({ isOpen: false, user: null })}
-      />
+    <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 overflow-hidden">
+      <table className="w-full text-left">
+        <thead>
+          <tr className="bg-slate-50 border-b border-slate-200">
+            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-center">
+              Username
+            </th>
+            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              Full Name
+            </th>
+            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+              Group
+            </th>
+            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+              Status
+            </th>
+            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">
+              Actions
+            </th>
+          </tr>
+        </thead>
 
-      {showCamera && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-slate-900/90 backdrop-blur-md p-4 animate-in fade-in">
-          <div className="bg-white p-8 rounded-[40px] shadow-2xl max-w-xl w-full animate-in zoom-in-95">
-            <div className="flex justify-between items-center mb-6"><h4 className="font-black text-slate-800 uppercase tracking-tight">Capture Staff Photo</h4><button onClick={stopCamera} className="text-slate-400 hover:text-slate-600"><X size={24} /></button></div>
-            <div className="relative rounded-3xl overflow-hidden bg-black aspect-video border-2 border-slate-100"><video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" /><canvas ref={canvasRef} className="hidden" /></div>
-            <div className="flex gap-4 mt-8"><button onClick={stopCamera} className="flex-1 py-4 bg-slate-100 text-slate-600 font-black text-xs uppercase rounded-2xl">Cancel</button><button onClick={capturePhoto} className="flex-1 py-4 bg-blue-600 text-white font-black text-xs uppercase rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-blue-200"><Camera size={18} /> Take Photo</button></div>
+        <tbody className="divide-y divide-slate-100">
+  {filteredUsers.map((staff: any) => {
+    const isActive =
+      staff.status?.toUpperCase() === "ACTIVE";
+
+    return (
+      <tr
+        key={staff.id}
+        className="hover:bg-slate-50 transition-colors group"
+      >
+        {/* USERNAME */}
+        <td className="px-8 py-5 text-center">
+          <span className="text-sm font-black text-slate-900 uppercase tracking-tight">
+            {staff.username}
+          </span>
+        </td>
+
+        {/* FULL NAME */}
+        <td className="px-8 py-5">
+          <div className="flex flex-col">
+            <span className="font-black text-slate-700 text-sm uppercase">
+              {staff.fullName}
+            </span>
+
+            {staff.defaultDepartment && (
+              <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                Home: {staff.defaultDepartment}
+              </span>
+            )}
+
+            {staff.userType === UserType.DOCTOR &&
+              staff.doctorName && (
+                <span className="text-[9px] font-bold text-blue-600 uppercase tracking-tight">
+                  Assoc: {staff.doctorName}
+                </span>
+              )}
           </div>
-        </div>
-      )}
+        </td>
+
+        {/* GROUP */}
+        <td className="px-8 py-5 text-center">
+          <span
+            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wide ${
+              staff?.groupColor && colorMap[staff.groupColor]
+                ? colorMap[staff.groupColor]
+                : ""
+            }`}
+          >
+            {staff.userGroup}
+          </span>
+        </td>
+
+        {/* STATUS */}
+        <td className="px-8 py-5 text-center">
+          <span
+            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wide ${
+              isActive
+                ? "bg-emerald-100 text-emerald-700"
+                : "bg-slate-200 text-slate-600"
+            }`}
+          >
+            {staff.status}
+          </span>
+        </td>
+
+        {/* ACTIONS */}
+        <td className="px-8 py-5 text-right">
+          <div className="flex items-center justify-end gap-4">
+
+            {/* EDIT */}
+            <button
+              onClick={() => handleEdit(staff)}
+              className="text-blue-600 hover:text-blue-800 font-black text-[10px] uppercase tracking-wide flex items-center gap-1.5 transition-colors"
+            >
+              <Edit2 size={14} />
+              Edit
+            </button>
+
+            {/* TOGGLE */}
+            <button
+              onClick={() =>
+                setStatusModal({ isOpen: true, user: staff })
+              }
+              className={`font-black text-[10px] uppercase flex items-center gap-1.5 transition-colors ${
+                isActive
+                  ? "text-rose-600 hover:text-rose-800"
+                  : "text-emerald-600 hover:text-emerald-800"
+              }`}
+            >
+              <Eye size={14} />
+              {isActive ? "Deactivate" : "Activate"}
+            </button>
+
+          </div>
+        </td>
+      </tr>
+    );
+  })}
+        </tbody>
+      </table>
     </div>
-  );
+  </>
+)}
+<StatusConfirmationModal
+  isOpen={statusModal.isOpen}
+  targetName={statusModal.user?.fullName || ""}
+  currentStatus={statusModal.user?.status || ""}
+  onConfirm={handleToggleStatus}
+  onCancel={() =>
+    setStatusModal({ isOpen: false, user: null })
+  }
+/>
+
+<TransactionOverlay 
+  status={txStatus} 
+  message={txMsg} 
+/>
+</div>
+);
 };
+
