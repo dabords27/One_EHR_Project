@@ -1,4 +1,4 @@
-
+import { Eye, EyeOff } from 'lucide-react';
 import React, { useState } from 'react';
 import { User as UserIcon, Lock, ChevronRight, Activity, Sparkles } from 'lucide-react';
 import { User, UserRole } from '../types';
@@ -20,48 +20,43 @@ const handleLogin = async (e: React.FormEvent) => {
   e.preventDefault();
   setError('');
 
-  try {
-    const res = await fetch(
-  `${import.meta.env.VITE_API_URL}/api/auth/login`,
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ username, password })
+ try {
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL}/api/auth/login`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, password })
+    }
+  );
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    throw new Error(data.message || "Login failed");
   }
-);
-    if (!res.ok) {
-      throw new Error("Invalid credentials");
-    }
 
-    const user = await res.json();
+  const user: User = {
+    ...data,
+    profileImage: data.photo || null
+  };
 
-    // 🚫 Status validation
-    if (user.status?.toUpperCase() === "DEACTIVATED") {
-      setError("ACCOUNT DEACTIVATED. CONTACT SYSTEM ADMINISTRATOR.");
-      return;
-    }
+  localStorage.setItem("ehr_user", JSON.stringify(user));
 
-    if (user.status?.toUpperCase() === "ON-HOLD") {
-      setError("ACCOUNT ON HOLD. CONTACT SYSTEM ADMINISTRATOR.");
-      return;
-    }
-
-    // ✅ Save user session
-    localStorage.setItem("ehr_user", JSON.stringify(user));
-
-    // ✅ Save active department (very important)
-    if (user.defaultDepartment) {
-      localStorage.setItem("activeDept", user.defaultDepartment);
-    }
-
-    onLogin(user);
-
-  } catch (err) {
-    setError("ACCESS DENIED: INVALID USER CREDENTIALS");
+  if (user.defaultDepartment) {
+    localStorage.setItem("activeDept", user.defaultDepartment);
   }
+
+  onLogin(user);
+
+} catch (err: any) {
+  setError(err.message);
+}
 };
+
+const [showPassword, setShowPassword] = useState(false);
 
 
   return (
@@ -126,17 +121,33 @@ const handleLogin = async (e: React.FormEvent) => {
 
               {/* Password Field */}
               <div className="space-y-3">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Password</label>
-                <div className="relative group">
-                  <Lock className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-sky-400 transition-colors" size={18} />
-                  <input 
-                    type="password" 
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="w-full pl-16 pr-6 py-5 bg-white/[0.03] border border-white/10 rounded-[28px] focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:bg-white/[0.07] transition-all font-bold text-white placeholder:text-slate-600 shadow-inner"
-                    placeholder="••••••••"
-                    required
-                  />
+  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">
+    Password
+  </label>
+
+  <div className="relative group">
+    <Lock
+      className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-sky-400 transition-colors"
+      size={18}
+    />
+
+    <input
+      type={showPassword ? "text" : "password"}   // 👈 toggle here
+      value={password}
+      onChange={(e) => setPassword(e.target.value)}
+      className="w-full pl-16 pr-14 py-5 bg-white/[0.03] border border-white/10 rounded-[28px] focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:bg-white/[0.07] transition-all font-bold text-white placeholder:text-slate-600 shadow-inner"
+      placeholder="••••••••"
+      required
+    />
+
+    {/* 👁 Eye Toggle Button */}
+    <button
+      type="button"
+      onClick={() => setShowPassword(!showPassword)}
+      className="absolute right-6 top-1/2 -translate-y-1/2 text-slate-500 hover:text-sky-400 transition-colors"
+    >
+      {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+    </button>
                 </div>
               </div>
 

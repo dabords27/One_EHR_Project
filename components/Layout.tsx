@@ -27,7 +27,14 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onSwitchDepartment, currentView, onNavigate }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
+const hasPhoto =
+  user.profileImage &&
+  user.profileImage !== "" &&
+  user.profileImage !== "null";
 
+const imageUrl = hasPhoto
+  ? `${import.meta.env.VITE_API_URL}${user.profileImage}`
+  : "/placeholder-user.png";
   return (
     <div className="flex min-h-screen bg-[#f1f5f9]">
       {/* Sidebar */}
@@ -127,13 +134,19 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onSwit
           {/* User Profile & Footer */}
           <div className="pt-6 border-t border-white/5">
             <div className={`flex items-center gap-3 mb-6 transition-all duration-300 ${isCollapsed ? 'justify-center' : 'px-1'}`}>
-              <div className="w-10 h-10 rounded-xl bg-slate-900 border border-white/5 flex items-center justify-center text-slate-500 overflow-hidden shadow-inner flex-shrink-0">
-                {user.profileImage ? (
-                  <img src={user.profileImage} className="w-full h-full object-cover" alt="User Profile" />
-                ) : (
-                  <UserIcon size={20} />
-                )}
-              </div>
+          <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-slate-900 flex-shrink-0">
+{hasPhoto ? (
+  <img
+    src={`${import.meta.env.VITE_API_URL}${user.profileImage}`}
+    className="w-full h-full object-cover"
+    alt="User Profile"
+  />
+) : (
+  <div className="w-full h-full flex items-center justify-center text-xs font-bold text-white bg-slate-700">
+    {user.fullName?.charAt(0)}
+  </div>
+)}
+</div>
               {!isCollapsed && (
                 <div className="overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">
                   <p className="text-xs font-black text-white truncate uppercase tracking-tight">{user.fullName}</p>

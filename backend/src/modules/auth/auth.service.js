@@ -1,12 +1,10 @@
 const { sql } = require('../../config/db');
 
 const login = async (pool, { username, password }) => {
-console.log("Incoming username:", username);
-console.log("Incoming password:", password);
 
-  // Find user (case-insensitive)
+  // 🔎 Find user (case-insensitive)
   const userResult = await pool.request()
-    .input("username", sql.VarChar(100), username)
+    .input("username", sql.VarChar(100), username.trim())
     .query(`
       SELECT *
       FROM dbo.users
@@ -19,14 +17,22 @@ console.log("Incoming password:", password);
 
   const dbUser = userResult.recordset[0];
 
-  // Compare password (plain for now)
-  if (dbUser.usr_password_hash.trim() !== password.trim()) {
+  // 🔐 Password check
+  if (
+    String(dbUser.usr_password_hash).trim() !==
+    String(password).trim()
+  ) {
     throw new Error("Invalid credentials");
   }
 
-  // Get default department
+  // 🚫 Block deactivated users (BIT column safe check)
+  if (Number(dbUser.usr_status_active) === 0) {
+    throw new Error("Account is deactivated. Please contact administrator.");
+  }
+
+  // 📌 Get default department
   const deptResult = await pool.request()
-    .input("username", sql.VarChar(100), username)
+    .input("username", sql.VarChar(100), username.trim())
     .query(`
       SELECT TOP 1
         d.dept_code,
@@ -42,17 +48,18 @@ console.log("Incoming password:", password);
     ? deptResult.recordset[0].dept_code
     : null;
 
+  // ✅ Return clean user object
   return {
     id: dbUser.auto_id,
     username: dbUser.usr_username,
     fullName: `${dbUser.usr_last_name}, ${dbUser.usr_first_name}`,
     role: dbUser.fk_usr_group_code,
-    status: dbUser.usr_status,
-    defaultDepartment
+    status: dbUser.usr_status_active, // boolean/bit
+    defaultDepartment,
+    photo: dbUser.usr_photo_path || null
   };
 };
 
 module.exports = {
   login
 };
-

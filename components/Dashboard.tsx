@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { 
   Users, 
@@ -13,85 +12,6 @@ import {
 import { Patient, Department, OperativeRecord } from '../types';
 import { StandardDateInput } from './StandardDateInput';
 
-// Mock Admission Data
-const ADMISSION_LIST: Patient[] = [
-  {
-    case_id: 'IP-2025-0001',
-    mrn: '2025-0003',
-    last_name: 'SAMPLE',
-    first_name: 'INPATIENT',
-    middle_name: 'GIT',
-    extension: '',
-    birthdate: '1999-12-12',
-    sex: 'Female',
-    patient_type: 'Inpatient',
-    room_no: '412',
-    bed_no: '2',
-    date_admitted: '2025-12-13 08:00 AM',
-    status: 'Active'
-  },
-  {
-    case_id: 'IP-2025-0002',
-    mrn: '2025-0004',
-    last_name: 'PALISOC',
-    first_name: 'JOHN JAYVEE',
-    middle_name: 'B',
-    extension: 'JR',
-    birthdate: '1995-05-20',
-    sex: 'Female',
-    patient_type: 'Inpatient',
-    room_no: '302',
-    bed_no: '1',
-    date_admitted: '2026-02-13 10:30 AM',
-    status: 'Active'
-  },
-  {
-    case_id: 'ER-2025-0003',
-    mrn: '2025-0005',
-    last_name: 'QUINTOS',
-    first_name: 'MARK',
-    middle_name: 'R',
-    extension: '',
-    birthdate: '1990-08-15',
-    sex: 'Male',
-    patient_type: 'Emergency',
-    room_no: 'ER-1',
-    bed_no: 'A',
-    date_admitted: '2025-02-14 09:00 AM',
-    status: 'Active'
-  },
-  {
-    case_id: 'IP-2025-0004',
-    mrn: '2025-0006',
-    last_name: 'DELA CRUZ',
-    first_name: 'ANA',
-    middle_name: 'M',
-    extension: '',
-    birthdate: '1988-11-25',
-    sex: 'Female',
-    patient_type: 'Inpatient',
-    room_no: '205',
-    bed_no: '1',
-    date_admitted: '2025-01-20 11:15 AM',
-    status: 'Discharged'
-  },
-  {
-    case_id: 'ER-2025-0005',
-    mrn: '2025-0007',
-    last_name: 'SANTOS',
-    first_name: 'MARIA CLARA',
-    middle_name: 'L',
-    extension: '',
-    birthdate: '1992-03-10',
-    sex: 'Female',
-    patient_type: 'Emergency',
-    room_no: 'ER-2',
-    bed_no: 'B',
-    date_admitted: '2025-02-10 11:30 PM',
-    status: 'Discharged'
-  }
-];
-
 interface DashboardProps {
   onNavigate: (view: 'dashboard' | 'create' | 'view' | 'setup', id: number | null, patient: Patient | null) => void;
   department: Department;
@@ -99,7 +19,8 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, setActivePatient }) => {
-  const [patients, setPatients] = useState<Patient[]>(ADMISSION_LIST);
+	const [patients, setPatients] = useState<Patient[]>([]);
+const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formsTodayCount, setFormsTodayCount] = useState(0);
   
@@ -128,51 +49,86 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
     
     setFormsTodayCount(count);
   }, []);
+  
+  const fetchAdmissions = async () => {
+  try {
+    setLoading(true);
 
-  const formatDateWithTime = (dateStr: string) => {
-    try {
-      const date = new Date(dateStr);
-      if (isNaN(date.getTime())) return dateStr;
-      
-      return date.toLocaleString('en-US', {
-        month: '2-digit',
-        day: '2-digit',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-      });
-    } catch (e) {
-      return dateStr;
-    }
-  };
+    const params = new URLSearchParams({
+      status: statusFilter === 'All' ? '' : statusFilter,
+      type: typeFilter === 'All' ? '' : typeFilter,
+      search: searchTerm,
+      dateFrom: fromDate,
+      dateTo: toDate
+    });
 
-  const filteredPatients = patients.filter(p => {
-    const fullName = `${p.last_name} ${p.first_name} ${p.middle_name} ${p.extension || ''}`.toLowerCase();
-    const matchesSearch = fullName.includes(searchTerm.toLowerCase()) || p.mrn.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'All' || p.status === statusFilter;
-    const matchesType = typeFilter === 'All' || p.patient_type === typeFilter;
-    
-    const admitDate = new Date(p.date_admitted);
-    admitDate.setHours(0, 0, 0, 0);
-    
-    let matchesDate = true;
-    if (fromDate) {
-      const start = new Date(fromDate);
-      start.setHours(0, 0, 0, 0);
-      if (admitDate < start) matchesDate = false;
-    }
-    if (toDate) {
-      const end = new Date(toDate);
-      end.setHours(23, 59, 59, 999);
-      if (admitDate > end) matchesDate = false;
-    }
+    const response = await fetch(`/api/admissions?${params.toString()}`);
+    const data = await response.json();
 
-    return matchesSearch && matchesStatus && matchesType && matchesDate;
+    const mapped = data.map((item: any) => ({
+      case_id: item.RegistryNo,
+      mrn: item.MRN,
+      last_name: item.PatientName?.split(',')[0] || '',
+      first_name: item.PatientName?.split(',')[1] || '',
+      middle_name: '',
+      extension: '',
+      birthdate: item.Birthdate,
+      sex: item.Sex,
+      patient_type: item.PatientType,
+      room_no: item.RoomBedNo ?? '',   // ✅ IMPORTANT
+      bed_no: '',
+      date_admitted: item.AdmissionDateTime,
+      status: item.Status
+    }));
+
+    setPatients(mapped);
+  } catch (error) {
+    console.error('Error fetching admissions:', error);
+  } finally {
+    setLoading(false);
+  }
+};
+
+useEffect(() => {
+  fetchAdmissions();
+}, [statusFilter, typeFilter, searchTerm, fromDate, toDate]);
+
+const formatDateWithTime = (dateStr: string) => {
+  if (!dateStr) return '';
+
+  // Remove Z if exists to prevent UTC conversion
+  const clean = dateStr.replace('Z', '');
+
+  const date = new Date(clean);
+
+  return date.toLocaleString('en-US', {
+    timeZone: 'Asia/Manila', // force PH timezone
+    month: '2-digit',
+    day: '2-digit',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    hour12: true
   });
+};
+  
 
   // Calculate active admissions based on Inpatient active status only
-  const activeAdmissionsCount = patients.filter(p => p.status === 'Active' && p.patient_type === 'Inpatient').length;
+const [activeAdmissionsCount, setActiveAdmissionsCount] = useState(0);
+const fetchActiveCount = async () => {
+  try {
+    const response = await fetch('/api/admissions/active-count');
+    const data = await response.json();
+    setActiveAdmissionsCount(data.count);
+  } catch (error) {
+    console.error('Error fetching active count:', error);
+  }
+};
+useEffect(() => {
+  fetchActiveCount();
+  const interval = setInterval(fetchActiveCount, 30000);
+  return () => clearInterval(interval);
+}, []);
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 max-w-full overflow-hidden">
@@ -234,7 +190,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
               className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none font-medium text-sm"
             >
               <option value="Active">Active</option>
-              <option value="Discharged">Discharged</option>
+              <option value="Discharge">Discharge</option>
               <option value="All">All</option>
             </select>
           </div>
@@ -289,7 +245,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredPatients.map((patient) => (
+                {patients.map((patient) => (
                   <tr 
                     key={patient.case_id} 
                     onClick={() => {
@@ -298,7 +254,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
                     }}
                     className="hover:bg-blue-50 cursor-pointer transition-colors group"
                   >
-                    <td className="px-3 py-4 text-xs font-bold text-slate-500 whitespace-nowrap">{patient.case_id}</td>
+                    <td className="px-3 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">{patient.case_id}</td>
                     <td className="px-3 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">{patient.mrn}</td>
                     <td className="px-3 py-4 text-sm font-black text-slate-900 uppercase whitespace-nowrap">
                       {patient.last_name}, {patient.first_name} {patient.middle_name ? patient.middle_name[0] + '.' : ''} {patient.extension || ''}
@@ -306,24 +262,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
                     <td className="px-3 py-4 text-xs font-bold text-slate-600 whitespace-nowrap text-center">
                       {new Date(patient.birthdate).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: 'numeric' })}
                     </td>
-                    <td className="px-2 py-4 text-xs font-black text-slate-600 whitespace-nowrap text-center">{patient.sex[0]}</td>
-                    <td className="px-3 py-4 text-xs font-bold text-slate-500 whitespace-nowrap text-center">
+                    <td className="px-3 py-4 text-xs font-bold text-slate-600 whitespace-nowrap text-center">{patient.sex[0]}</td>
+                    <td className="px-3 py-4 text-xs font-bold text-slate-600 whitespace-nowrap text-center">
                       {patient.patient_type === 'Inpatient' ? 'IP' : patient.patient_type === 'Emergency' ? 'ER' : 'OP'}
                     </td>
                     <td className="px-3 py-4 text-xs font-bold text-slate-600 text-center whitespace-nowrap">
-                      {patient.room_no}{patient.bed_no ? `-${patient.bed_no}` : ''}
+                      {patient.room_no}
                     </td>
-                    <td className="px-3 py-4 text-xs font-bold text-slate-500 whitespace-nowrap">
+                    <td className="px-3 py-4 text-xs font-bold text-slate-600 whitespace-nowrap">
                       {formatDateWithTime(patient.date_admitted)}
                     </td>
                     <td className="px-3 py-4 whitespace-nowrap text-center">
-                      <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ${
-                        patient.status === 'Active' 
-                          ? 'bg-emerald-50 text-emerald-600 ring-emerald-100' 
-                          : 'bg-slate-50 text-slate-400 ring-slate-100'
-                      }`}>
-                        {patient.status}
-                      </span>
+<span
+  className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase ring-1 ${
+    patient.status === 'Active'
+      ? 'bg-emerald-50 text-emerald-600 ring-emerald-100'
+      : 'bg-slate-100 text-slate-700 ring-slate-300'
+  }`}
+>
+  {patient.status}
+</span>
                     </td>
                   </tr>
                 ))}
@@ -331,7 +289,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
             </table>
           </div>
           
-          {filteredPatients.length === 0 && (
+          {patients.length === 0 && !loading && (
             <div className="py-16 text-center text-slate-300">
               <FilePlus size={48} className="mx-auto mb-3 opacity-20" />
               <p className="font-black uppercase text-xs">No Patients Found for these Criteria</p>
@@ -345,7 +303,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
             Click on a patient row to initialize a new clinical form for that patient
           </p>
           <p className="text-xs font-black text-slate-300 uppercase tracking-tight">
-            Displaying {filteredPatients.length} records
+            Displaying {patients.length} records
           </p>
         </div>
       </div>

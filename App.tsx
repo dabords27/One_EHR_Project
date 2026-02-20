@@ -13,6 +13,7 @@ import { ProgressNotesModule } from './components/ProgressNotesModule';
 import { CourseInWardModule } from './components/CourseInWardModule';
 import { User, Patient, Department } from './types';
 
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [department, setDepartment] = useState<Department | null>(null);

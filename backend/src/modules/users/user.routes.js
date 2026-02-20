@@ -1,12 +1,35 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const userController = require('./user.controller');
+const upload = require("../../../middleware/upload.middleware");
+const userController = require("./user.controller");
 
-router.get('/', userController.getUsers);
-router.post('/', userController.createUser);
-router.get('/:id', userController.getUserById);
-router.put('/:id', userController.updateUser);
-router.put('/:id/status', userController.updateUserStatus);
+// CREATE USER
+router.post(
+  "/",
+  upload.fields([
+    { name: "profileImage", maxCount: 1 },
+    { name: "signature", maxCount: 1 }
+  ]),
+  userController.createUser
+);
+
+// UPDATE USER
+router.put(
+  "/:id",
+  upload.fields([
+    { name: "profileImage", maxCount: 1 },
+    { name: "signature", maxCount: 1 }
+  ]),
+  userController.updateUser
+);
+
+// GET USERS
+router.get("/", userController.getUsers);
+
+// GET SINGLE USER
+router.get("/:id", userController.getUserById);
+
+// UPDATE STATUS
+router.patch("/:id/status", userController.updateUserStatus);
 
 module.exports = router;
-

@@ -25,6 +25,7 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ onBa
 
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState(""); 
   const [isEditingSubtitle, setIsEditingSubtitle] = useState(false);
   const [subtitle, setSubtitle] = useState(
     () => localStorage.getItem('dept_subtitle') || 'INFRASTRUCTURE • STATION MANAGEMENT'
@@ -32,7 +33,15 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ onBa
 
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
   const [txMsg, setTxMsg] = useState('');
-  const [validationError, setValidationError] = useState('');
+const [validationError, setValidationError] = useState<{
+  code: boolean;
+  name: boolean;
+  message: string;
+}>({
+  code: false,
+  name: false,
+  message: ""
+});
 
 const [statusModal, setStatusModal] = useState<{
   isOpen: boolean;
@@ -75,33 +84,60 @@ const [statusModal, setStatusModal] = useState<{
     fetchDepartments();
   }, []);
 
-  /* ================= INPUT ================= */
+/* ================= INPUT ================= */
 
 const handleInputChange = (
   e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
 ) => {
   const { name, value } = e.target;
 
-  setFormData(prev => ({
-    ...prev,
-    [name]:
-      name === "code" || name === "name"
-        ? value.toUpperCase()
-        : value   // DO NOT uppercase status
-  }));
+  // Build updated form FIRST
+  const updatedForm = {
+    ...formData,
+   [name]: value,
+  };
 
-  // Duplicate code validation
-  if (name === "code") {
-    const exists = depts.some(
-      d =>
-        d.code.toUpperCase() === value.toUpperCase() &&
-        d.id !== editId
-    );
+  setFormData(updatedForm);
 
-    setValidationError(
-      exists ? "System Code already exists." : ""
-    );
+  // 🚫 Skip validation in edit mode
+  if (editId) {
+    setValidationError({
+      code: false,
+      name: false,
+      message: "",
+    });
+    return;
   }
+
+
+  // Always validate both fields together
+  const normalizedCode = updatedForm.code.trim().toUpperCase();
+  const normalizedName = updatedForm.name.trim().toUpperCase();
+
+  const codeExists = depts.some(
+    (d) =>
+      d.code.trim().toUpperCase() === normalizedCode &&
+      d.id !== editId
+  );
+
+  const nameExists = depts.some(
+    (d) =>
+      d.name.trim().toUpperCase() === normalizedName &&
+      d.id !== editId
+  );
+
+  setValidationError({
+    code: codeExists,
+    name: nameExists,
+    message:
+      codeExists && nameExists
+        ? "System Code and Department Name already exist."
+        : codeExists
+        ? "System Code already exists."
+        : nameExists
+        ? "Department Name already exists."
+        : "",
+  });
 };
 
 
@@ -109,10 +145,9 @@ const handleInputChange = (
 
   const handleSave = async () => {
    
-if (validationError) {
+if (validationError.code || validationError.name) {
   setTxStatus('error');
-  setTxMsg(validationError);
-  setTimeout(() => setTxStatus('idle'), 1500);
+  setTxMsg(validationError.message);
   return;
 }   if (!formData.name || !formData.code) return;
 
@@ -228,7 +263,17 @@ const handleSaveSubtitle = () => {
   localStorage.setItem('dept_subtitle', subtitle);
   setIsEditingSubtitle(false);
 };
-const [searchTerm, setSearchTerm] = useState(""); 
+/* ================= SEARCH FILTER ================= */
+
+const filteredDepts = depts.filter((dept) => {
+  const term = searchTerm.toLowerCase();
+
+  return (
+    dept.code.toLowerCase().includes(term) ||
+    dept.name.toLowerCase().includes(term) ||
+    dept.status.toLowerCase().includes(term)
+  );
+});
  return (
     <div className="space-y-6 animate-in fade-in duration-500">
 {/* HEADER */}
@@ -316,9 +361,11 @@ const [searchTerm, setSearchTerm] = useState("");
   disabled={!!editId}
   style={{ textTransform: 'uppercase' }}
   placeholder="E.G. ICU"
-  className={`w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-black ${
-    validationError ? 'border-rose-400' : 'border-slate-200'
-  } ${editId ? 'text-slate-400 cursor-not-allowed' : 'text-emerald-600'}`}
+className={`w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-bold ${
+  validationError.code
+    ? "border-rose-500 ring-1 ring-rose-500"
+    : "border-slate-200"
+}`}
 />
             </div>
 
@@ -327,12 +374,17 @@ const [searchTerm, setSearchTerm] = useState("");
                 Department Name <Mandatory />
               </label>
               <input
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-				placeholder="E.G. INTENSIVE CARE UNIT"
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 text-sm font-bold"
-              />
+  name="name"
+  value={formData.name}
+  onChange={handleInputChange}
+  placeholder="E.G. INTENSIVE CARE UNIT"
+style={{ textTransform: "uppercase" }}
+className={`w-full bg-slate-50 border rounded-xl px-4 py-3 text-sm font-bold ${
+  validationError.name
+    ? "border-rose-500 ring-1 ring-rose-500"
+    : "border-slate-200"
+}`}
+/>
             </div>
 
             <div>
@@ -360,7 +412,7 @@ const [searchTerm, setSearchTerm] = useState("");
 
             <button
   onClick={handleSave}
-  disabled={!!validationError}
+  disabled={validationError.code || validationError.name}
   className="px-8 py-2.5 bg-slate-900 text-white font-black text-xs uppercase rounded-xl flex items-center gap-2 shadow-lg hover:bg-black transition-all disabled:opacity-50"
 >
                 <Save size={16} />
@@ -384,63 +436,81 @@ const [searchTerm, setSearchTerm] = useState("");
           </thead>
 
           <tbody className="divide-y divide-slate-100">
-            {depts.map((dept) => (
-              <tr key={dept.id} className="hover:bg-slate-50 transition-colors">
-                <td className="px-8 py-5 text-center">
-                  <span className="text-[11px] font-black text-emerald-600 tracking-widest uppercase bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
-                    {dept.code}
-                  </span>
-                </td>
+  {filteredDepts.length === 0 ? (
+    <tr>
+      <td
+        colSpan={4}
+        className="px-8 py-10 text-center text-slate-400 font-semibold"
+      >
+        No matching departments found.
+      </td>
+    </tr>
+  ) : (
+    filteredDepts.map((dept) => (
+      <tr key={dept.id} className="hover:bg-slate-50 transition-colors">
+        <td className="px-8 py-5 text-center">
+          <span className="text-[11px] font-black text-emerald-600 tracking-widest uppercase bg-emerald-50 px-2 py-1 rounded-lg border border-emerald-100">
+            {dept.code}
+          </span>
+        </td>
 
-                <td className="px-8 py-5">
-                  <span className="font-black text-slate-800 text-sm uppercase tracking-tight">
-                    {dept.name}
-                  </span>
-                </td>
+        <td className="px-8 py-5">
+          <span className="font-black text-slate-800 text-sm uppercase tracking-tight">
+            {dept.name}
+          </span>
+        </td>
 
-                <td className="px-8 py-5 text-center">
-                  <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${
-                    dept.status === 'Active'
-                      ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-                      : 'bg-slate-100 text-slate-500 border border-slate-200'
-                  }`}>
-                    {dept.status}
-                  </span>
-                </td>
+        <td className="px-8 py-5 text-center">
+          <span
+            className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${
+              dept.status === "Active"
+                ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+                : "bg-slate-100 text-slate-500 border border-slate-200"
+            }`}
+          >
+            {dept.status}
+          </span>
+        </td>
 
-                <td className="px-8 py-5 text-right">
-                  <div className="flex items-center justify-end gap-3">
-                    <button onClick={() => handleEdit(dept)}
-                      className="text-blue-600 hover:text-blue-800 font-bold text-[10px] uppercase flex items-center gap-1.5">
-                      <Edit3 size={14} /> Edit
-                    </button>
+        <td className="px-8 py-5 text-right">
+          <div className="flex items-center justify-end gap-3">
+            <button
+              onClick={() => handleEdit(dept)}
+              className="text-blue-600 hover:text-blue-800 font-bold text-[10px] uppercase flex items-center gap-1.5"
+            >
+              <Edit3 size={14} /> Edit
+            </button>
 
-                    <button
-onClick={() =>
-  setStatusModal({
-    isOpen: true,
-    dept,
-    action: dept.status === "Active"
-      ? "deactivate"
-      : "activate"
-  })
-}
-                      className={`font-black text-[10px] uppercase flex items-center gap-1.5 ${
-                        dept.status === 'Active'
-                          ? 'text-rose-500 hover:text-rose-700'
-                          : 'text-emerald-600 hover:text-emerald-800'
-                      }`}
-                    >
-                      {dept.status === 'Active'
-                        ? <ToggleLeft size={16} />
-                        : <ToggleRight size={16} />}
-                      {dept.status === 'Active' ? 'Deactivate' : 'Activate'}
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
+            <button
+              onClick={() =>
+                setStatusModal({
+                  isOpen: true,
+                  dept,
+                  action:
+                    dept.status === "Active"
+                      ? "deactivate"
+                      : "activate",
+                })
+              }
+              className={`font-black text-[10px] uppercase flex items-center gap-1.5 ${
+                dept.status === "Active"
+                  ? "text-rose-500 hover:text-rose-700"
+                  : "text-emerald-600 hover:text-emerald-800"
+              }`}
+            >
+              {dept.status === "Active" ? (
+                <ToggleLeft size={16} />
+              ) : (
+                <ToggleRight size={16} />
+              )}
+              {dept.status === "Active" ? "Deactivate" : "Activate"}
+            </button>
+          </div>
+        </td>
+      </tr>
+    ))
+  )}
+</tbody>
         </table>
       </div>
 

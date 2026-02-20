@@ -1,23 +1,31 @@
 const sql = require("mssql");
 const getUsers = async (pool) => {
-  const result = await pool.request().query(`
-    SELECT 
-      u.auto_id,
-      u.usr_username,
-      u.usr_last_name + ', ' + u.usr_first_name AS full_name,
-      u.fk_usr_group_code,
-      u.fk_usr_type_code,
-      u.usr_status,
-      d.dept_name AS default_department_name,
-uda.fk_dept_code AS default_department
-    FROM dbo.users u
-    LEFT JOIN dbo.user_department_access uda
-      ON u.usr_username = uda.fk_username
-      AND uda.is_default = 1
-	  LEFT JOIN dbo.departments d
-  ON uda.fk_dept_code = d.dept_code
-    ORDER BY u.usr_last_name
-  `);
+const result = await pool.request().query(`
+  SELECT 
+    u.auto_id,
+    u.usr_username,
+    u.usr_last_name + ', ' + u.usr_first_name AS full_name,
+    u.fk_usr_group_code,
+    u.fk_usr_type_code,
+    u.usr_status_active,
+    ug.group_color,  -- ✅ ADD THIS
+    d.dept_name AS default_department_name,
+    uda.fk_dept_code AS default_department
+
+  FROM dbo.users u
+
+  LEFT JOIN dbo.user_groups ug   -- ✅ JOIN GROUP TABLE
+    ON u.fk_usr_group_code = ug.usr_group_code
+
+  LEFT JOIN dbo.user_department_access uda
+    ON u.usr_username = uda.fk_username
+    AND uda.is_default = 1
+
+  LEFT JOIN dbo.departments d
+    ON uda.fk_dept_code = d.dept_code
+
+  ORDER BY u.usr_last_name
+`);;
 
   return result.recordset;
 };
@@ -84,11 +92,11 @@ const updateUser = async (pool, id, data) => {
       usr_email,
       fk_usr_group_code,
       fk_usr_type_code,
-      usr_status,
+      usr_status_active,
       departments = [],
       defaultDepartment,
-      profileImage,
-      eSignature,
+      usr_photo_path,
+	  usr_signature_path,
       usr_password
     } = data;
 
@@ -111,43 +119,47 @@ const updateUser = async (pool, id, data) => {
 
     const username = usernameLookup.recordset[0].usr_username;
 
-    // Update user table
-    const request = transaction.request()
-      .input("id", id)
-      .input("usr_last_name", usr_last_name)
-      .input("usr_first_name", usr_first_name)
-      .input("usr_middle_name", usr_middle_name)
-      .input("usr_extension", usr_extension)
-      .input("usr_email", usr_email)
-      .input("fk_usr_group_code", fk_usr_group_code)
-      .input("fk_usr_type_code", fk_usr_type_code)
-      .input("usr_status", usr_status)
-      .input("usr_photo_path", profileImage || null)
-      .input("usr_signature_path", eSignature || null);
+   // Update user table
+const request = transaction.request()
+  .input("id", id)
+  .input("usr_last_name", usr_last_name)
+  .input("usr_first_name", usr_first_name)
+  .input("usr_middle_name", usr_middle_name)
+  .input("usr_extension", usr_extension)
+  .input("usr_email", usr_email)
+  .input("fk_usr_group_code", fk_usr_group_code)
+  .input("fk_usr_type_code", fk_usr_type_code)
+  .input("usr_status_active", usr_status_active)
+  .input("usr_photo_path", usr_photo_path || null);
 
-    let passwordUpdate = "";
+let signatureUpdate = "";
+if (usr_signature_path !== undefined) {
+  signatureUpdate = ", usr_signature_path = @usr_signature_path";
+  request.input("usr_signature_path", usr_signature_path);
+}
 
-    if (usr_password && usr_password.trim() !== "") {
-      passwordUpdate = ", usr_password_hash = @usr_password_hash";
-      request.input("usr_password_hash", usr_password);
-    }
+let passwordUpdate = "";
+if (usr_password && usr_password.trim() !== "") {
+  passwordUpdate = ", usr_password_hash = @usr_password_hash";
+  request.input("usr_password_hash", usr_password);
+}
 
-    await request.query(`
-      UPDATE dbo.users
-      SET
-        usr_last_name = @usr_last_name,
-        usr_first_name = @usr_first_name,
-        usr_middle_name = @usr_middle_name,
-        usr_extension = @usr_extension,
-        usr_email = @usr_email,
-        fk_usr_group_code = @fk_usr_group_code,
-        fk_usr_type_code = @fk_usr_type_code,
-        usr_status = @usr_status,
-        usr_photo_path = @usr_photo_path,
-        usr_signature_path = @usr_signature_path
-        ${passwordUpdate}
-      WHERE auto_id = @id
-    `);
+await request.query(`
+  UPDATE dbo.users
+  SET
+    usr_last_name = @usr_last_name,
+    usr_first_name = @usr_first_name,
+    usr_middle_name = @usr_middle_name,
+    usr_extension = @usr_extension,
+    usr_email = @usr_email,
+    fk_usr_group_code = @fk_usr_group_code,
+    fk_usr_type_code = @fk_usr_type_code,
+    usr_status_active = @usr_status_active,
+    usr_photo_path = @usr_photo_path
+    ${signatureUpdate}
+    ${passwordUpdate}
+  WHERE auto_id = @id
+`);
 // DELETE old departments
 await transaction.request()
   .input("username", sql.VarChar(100), username)
@@ -190,10 +202,110 @@ return { message: "User updated successfully" };
 }
 };
 
+const updateUserStatus = async (pool, id, usr_status_active) => {
+  await pool.request()
+    .input("id", sql.Int, id)
+    .input("usr_status_active", sql.Bit, usr_status_active ? 1 : 0)
+    .query(`
+      UPDATE dbo.users
+      SET usr_status_active = @usr_status_active
+      WHERE auto_id = @id
+    `);
+
+  return { message: "Status updated successfully" };
+};
+
+const createUser = async (pool, data) => {
+  const {
+    usr_last_name,
+    usr_first_name,
+    usr_middle_name,
+    usr_extension,
+    usr_username,
+    usr_email,
+    usr_password,
+    fk_usr_group_code,
+    fk_usr_type_code,
+    usr_status_active,
+    usr_photo_path,
+    usr_signature_path,
+    usr_associate_doctor_name
+  } = data;
+
+  const transaction = pool.transaction();
+
+  try {
+    await transaction.begin();
+
+    const request = transaction.request()
+      .input("usr_last_name", usr_last_name)
+      .input("usr_first_name", usr_first_name)
+      .input("usr_middle_name", usr_middle_name)
+      .input("usr_extension", usr_extension)
+      .input("usr_username", usr_username)
+      .input("usr_email", usr_email)
+      .input("usr_password_hash", usr_password)
+      .input("fk_usr_group_code", fk_usr_group_code)
+      .input("fk_usr_type_code", fk_usr_type_code)
+      .input("usr_status_active", usr_status_active ? 1 : 0)
+      .input("usr_photo_path", usr_photo_path || null)
+      .input("usr_associate_doctor_name", usr_associate_doctor_name || null);
+
+    if (usr_signature_path !== undefined) {
+      request.input("usr_signature_path", usr_signature_path);
+    } else {
+      request.input("usr_signature_path", null);
+    }
+
+    await request.query(`
+      INSERT INTO dbo.users (
+        usr_last_name,
+        usr_first_name,
+        usr_middle_name,
+        usr_extension,
+        usr_username,
+        usr_email,
+        usr_password_hash,
+        fk_usr_group_code,
+        fk_usr_type_code,
+        usr_status_active,
+        usr_photo_path,
+        usr_signature_path,
+        usr_associate_doctor_name
+      )
+      VALUES (
+        @usr_last_name,
+        @usr_first_name,
+        @usr_middle_name,
+        @usr_extension,
+        @usr_username,
+        @usr_email,
+        @usr_password_hash,
+        @fk_usr_group_code,
+        @fk_usr_type_code,
+        @usr_status_active,
+        @usr_photo_path,
+        @usr_signature_path,
+        @usr_associate_doctor_name
+      )
+    `);
+
+    await transaction.commit();
+
+    return { message: "User created successfully" };
+
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+};
 module.exports = {
   getUsers,
   getUserById,
-  updateUser
+createUser, 
+  updateUser,
+  updateUserStatus
 };
+
 
 
