@@ -1,5 +1,5 @@
 const { sql } = require('../../config/db');
-
+const bcrypt = require('bcrypt');
 const login = async (pool, { username, password }) => {
 
   // 🔎 Find user (case-insensitive)
@@ -18,12 +18,14 @@ const login = async (pool, { username, password }) => {
   const dbUser = userResult.recordset[0];
 
   // 🔐 Password check
-  if (
-    String(dbUser.usr_password_hash).trim() !==
-    String(password).trim()
-  ) {
-    throw new Error("Invalid credentials");
-  }
+const isMatch = await bcrypt.compare(
+  password,
+  dbUser.usr_password_hash
+);
+
+if (!isMatch) {
+  throw new Error("Invalid credentials");
+}
 
   // 🚫 Block deactivated users (BIT column safe check)
   if (Number(dbUser.usr_status_active) === 0) {
@@ -44,20 +46,23 @@ const login = async (pool, { username, password }) => {
         AND uda.is_default = 1
     `);
 
-  const defaultDepartment = deptResult.recordset.length
-    ? deptResult.recordset[0].dept_code
-    : null;
+const defaultDepartment = deptResult.recordset.length
+  ? {
+      code: deptResult.recordset[0].dept_code,
+      description: deptResult.recordset[0].dept_name
+    }
+  : null;
 
   // ✅ Return clean user object
-  return {
-    id: dbUser.auto_id,
-    username: dbUser.usr_username,
-    fullName: `${dbUser.usr_last_name}, ${dbUser.usr_first_name}`,
-    role: dbUser.fk_usr_group_code,
-    status: dbUser.usr_status_active, // boolean/bit
-    defaultDepartment,
-    photo: dbUser.usr_photo_path || null
-  };
+return {
+  id: dbUser.auto_id,
+  username: dbUser.usr_username,
+  fullName: `${dbUser.usr_last_name}, ${dbUser.usr_first_name}`,
+  role: String(dbUser.fk_usr_group_code).toUpperCase(),
+  status: dbUser.usr_status_active,
+  defaultDepartment, // object now
+  photo: dbUser.usr_photo_path || null
+};
 };
 
 module.exports = {

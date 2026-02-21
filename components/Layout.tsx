@@ -75,7 +75,7 @@ const imageUrl = hasPhoto
                     Active Station
                   </p>
                   <p className="text-[11px] text-white font-black uppercase tracking-tight">
-                    {user.department}
+                    {user.department?.description}
                   </p>
                 </div>
                 <button 
@@ -83,7 +83,7 @@ const imageUrl = hasPhoto
                   className="mt-3 flex items-center gap-1.5 text-[9px] text-sky-400/80 font-black uppercase tracking-widest hover:text-white transition-all group"
                 >
                   <ArrowLeft size={10} strokeWidth={3} className="group-hover:-translate-x-0.5 transition-transform" /> 
-                  Switch Dept
+                  Switch Department
                 </button>
               </div>
             )}

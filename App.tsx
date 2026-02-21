@@ -22,35 +22,56 @@ const App: React.FC = () => {
   const [activePatient, setActivePatient] = useState<Patient | null>(null);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
 
+  // 🔎 DEBUG USER OBJECT
   useEffect(() => {
-    const savedUser = localStorage.getItem('dl_suite_user');
-    const savedDept = localStorage.getItem('dl_suite_dept');
-    
-    if (savedUser) {
-      const parsedUser = JSON.parse(savedUser) as User;
-      setUser(parsedUser);
-      
-      if (savedDept) {
-        setDepartment(savedDept as Department);
-      } else if (parsedUser.defaultDepartment) {
-        setDepartment(parsedUser.defaultDepartment as Department);
-        localStorage.setItem('dl_suite_dept', parsedUser.defaultDepartment);
+    console.log("USER OBJECT:", user);
+  }, [user]);
+  
+  useEffect(() => {
+  const savedUser = localStorage.getItem('dl_suite_user');
+  const savedDept = localStorage.getItem('dl_suite_dept');
+
+  if (savedUser) {
+    const parsedUser = JSON.parse(savedUser) as User;
+    setUser(parsedUser);
+
+    if (savedDept) {
+      try {
+        const parsedDept = JSON.parse(savedDept);
+        setDepartment(parsedDept);
+      } catch {
+        // fallback if old string format
+        setDepartment({
+          code: savedDept,
+          description: savedDept
+        } as Department);
       }
+    } else if (parsedUser.defaultDepartment) {
+      setDepartment(parsedUser.defaultDepartment);
+      localStorage.setItem(
+        'dl_suite_dept',
+        JSON.stringify(parsedUser.defaultDepartment)
+      );
     }
-  }, []);
+  }
+}, []);
 
 const handleLogin = (loggedInUser: User) => {
   setUser(loggedInUser);
+
   localStorage.setItem('dl_suite_user', JSON.stringify(loggedInUser));
 
+  // ✅ Save last login username
+  localStorage.setItem('last_login_username', loggedInUser.username);
+
   if (loggedInUser.defaultDepartment) {
-    handleSelectDepartment(loggedInUser.defaultDepartment as Department);
+    handleSelectDepartment(loggedInUser.defaultDepartment);
   }
-};
+};;
 
   const handleSelectDepartment = (dept: Department) => {
     setDepartment(dept);
-    localStorage.setItem('dl_suite_dept', dept);
+    localStorage.setItem('dl_suite_dept', JSON.stringify(dept));
     setCurrentView('dashboard');
   };
 

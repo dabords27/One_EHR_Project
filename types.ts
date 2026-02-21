@@ -67,7 +67,10 @@ export interface NoteTemplate {
   category: string;
 }
 
-export type Department = 'Delivery & Labor Suite' | 'Emergency Room' | 'Pediatrics' | 'Surgery';
+export interface Department {
+  code: string;
+  description: string;
+}
 
 export interface DepartmentEntry {
   id: string;
@@ -81,9 +84,11 @@ export interface User {
   username: string;
   role: UserRole; 
   fullName: string;
-  departments: string[];
-  department?: Department; 
-  defaultDepartment?: string;
+
+  departments: Department[];       // accessible departments
+  department?: Department;         // active department
+  defaultDepartment?: Department;  // default department
+
   password?: string;
   
   lastName?: string;

@@ -1,4 +1,5 @@
 const sql = require("mssql");
+const bcrypt = require("bcrypt");
 const getUsers = async (pool) => {
 const result = await pool.request().query(`
   SELECT 
@@ -140,8 +141,9 @@ if (usr_signature_path !== undefined) {
 
 let passwordUpdate = "";
 if (usr_password && usr_password.trim() !== "") {
+  const hashedPassword = await bcrypt.hash(usr_password, 10);
   passwordUpdate = ", usr_password_hash = @usr_password_hash";
-  request.input("usr_password_hash", usr_password);
+  request.input("usr_password_hash", hashedPassword);
 }
 
 await request.query(`
@@ -244,7 +246,7 @@ const createUser = async (pool, data) => {
       .input("usr_extension", usr_extension)
       .input("usr_username", usr_username)
       .input("usr_email", usr_email)
-      .input("usr_password_hash", usr_password)
+      .input("usr_password_hash", hashedPassword)
       .input("fk_usr_group_code", fk_usr_group_code)
       .input("fk_usr_type_code", fk_usr_type_code)
       .input("usr_status_active", usr_status_active ? 1 : 0)

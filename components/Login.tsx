@@ -7,12 +7,16 @@ interface LoginProps {
   onLogin: (user: User) => void;
 }
 
+
+
 // Professional static design constants
 const STATIC_BG = 'radial-gradient(circle at top right, #0f172a, #020617)';
 const ACCENT_GRADIENT = 'linear-gradient(135deg, #0ea5e9 0%, #2563eb 100%)';
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [username, setUsername] = useState('');
+const [username, setUsername] = useState(
+  localStorage.getItem('last_login_username') || ''
+);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
 
@@ -102,7 +106,11 @@ const [showPassword, setShowPassword] = useState(false);
               <p className="text-slate-500 font-black uppercase text-[10px] tracking-[0.4em]">Login Authentication</p>
             </div>
 
-            <form onSubmit={handleLogin} className="space-y-8 flex-1">
+            <form 
+  onSubmit={handleLogin} 
+  autoComplete="off"
+  className="space-y-8 flex-1"
+>
               {/* Username Field */}
               <div className="space-y-3">
                 <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] pl-2">Username</label>
@@ -111,6 +119,8 @@ const [showPassword, setShowPassword] = useState(false);
                   <input 
                     type="text" 
                     value={username}
+					autoComplete="off"
+					name="username"
                     onChange={(e) => setUsername(e.target.value)}
                     className="w-full pl-16 pr-6 py-5 bg-white/[0.03] border border-white/10 rounded-[28px] focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:bg-white/[0.07] transition-all font-bold text-white placeholder:text-slate-600 shadow-inner"
                     placeholder="Username"
@@ -134,6 +144,8 @@ const [showPassword, setShowPassword] = useState(false);
     <input
       type={showPassword ? "text" : "password"}   // 👈 toggle here
       value={password}
+	  autoComplete="new-password"
+	  name="password"
       onChange={(e) => setPassword(e.target.value)}
       className="w-full pl-16 pr-14 py-5 bg-white/[0.03] border border-white/10 rounded-[28px] focus:outline-none focus:ring-2 focus:ring-sky-500/50 focus:bg-white/[0.07] transition-all font-bold text-white placeholder:text-slate-600 shadow-inner"
       placeholder="••••••••"

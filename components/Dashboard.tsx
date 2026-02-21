@@ -159,7 +159,7 @@ useEffect(() => {
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-0.5">Station</p>
             <p className="text-sm font-black text-sky-700 uppercase tracking-widest mt-1">
-              {department}
+              {department?.description}
             </p>
           </div>
         </div>
