@@ -13,6 +13,20 @@ const login = async (req, res) => {
   }
 };
 
+const verifyUser = async (req, res) => {
+  try {
+    const result = await authService.verifyUser(
+      req.app.locals.pool,
+      req.body
+    );
+
+    res.json(result);
+  } catch (err) {
+    res.status(401).json({ message: err.message });
+  }
+};
+
 module.exports = {
-  login
+  login,
+verifyUser
 };

@@ -1,6 +1,19 @@
+const sql = require("mssql");
+
+/* ==============================
+   GET DEPARTMENTS
+================================= */
 exports.getDepartments = async (pool) => {
   const result = await pool.request().query(`
-    SELECT auto_id, dept_code, dept_name, dept_status_active
+    SELECT 
+      auto_id,
+      dept_code,
+      dept_name,
+      dept_status_active,
+      dept_created_by,
+      dept_date_created,
+      dept_updated_by,
+      dept_date_updated
     FROM dbo.departments
     ORDER BY dept_name
   `);
@@ -8,30 +21,84 @@ exports.getDepartments = async (pool) => {
   return result.recordset;
 };
 
-exports.createDepartment = async (pool, data) => {
-  await pool.request()
-    .input('dept_code', data.dept_code)
-    .input('dept_name', data.dept_name)
-    .input('dept_status_active', data.dept_status_active ? 1 : 0)
-    .query(`
-      INSERT INTO dbo.departments
-      (dept_code, dept_name, dept_status_active, dept_date_created, dept_created_by)
-      VALUES
-      (@dept_code, @dept_name, @dept_status_active, GETDATE(), 'SYSTEM')
-    `);
+/* ==============================
+   CREATE DEPARTMENT
+================================= */
+exports.createDepartment = async (pool, data, currentUser) => {
+
+  const transaction = pool.transaction();
+
+  try {
+    await transaction.begin();
+
+    // 🔥 USE VERIFIED USER FIRST
+    const createdBy = data.createdBy || currentUser?.username || "SYSTEM";
+
+    await transaction.request()
+      .input("dept_code", sql.VarChar(50), data.dept_code)
+      .input("dept_name", sql.VarChar(200), data.dept_name)
+      .input("dept_status_active", sql.Bit, data.dept_status_active ? 1 : 0)
+      .input("dept_created_by", sql.VarChar(100), createdBy)
+      .input("dept_date_created", sql.DateTime, new Date())
+      .query(`
+        INSERT INTO dbo.departments (
+          dept_code,
+          dept_name,
+          dept_status_active,
+          dept_created_by,
+          dept_date_created
+        )
+        VALUES (
+          @dept_code,
+          @dept_name,
+          @dept_status_active,
+          @dept_created_by,
+          @dept_date_created
+        )
+      `);
+
+    await transaction.commit();
+
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
 };
 
-exports.updateDepartment = async (pool, id, data) => {
-  await pool.request()
-    .input('id', id)
-    .input('dept_name', data.dept_name)
-    .input('dept_status_active', data.dept_status_active ? 1 : 0)
-    .query(`
-      UPDATE dbo.departments
-      SET dept_name = @dept_name,
-          dept_status_active = @dept_status_active
-      WHERE auto_id = @id
-    `);
-	console.log("Update data:", data);
-};
 
+/* ==============================
+   UPDATE DEPARTMENT
+================================= */
+exports.updateDepartment = async (pool, id, data, currentUser) => {
+
+  const transaction = pool.transaction();
+
+  try {
+    await transaction.begin();
+
+    // 🔥 USE VERIFIED USER FIRST
+    const updatedBy = data.updatedBy || currentUser?.username || "SYSTEM";
+
+    await transaction.request()
+      .input("id", sql.Int, id)
+      .input("dept_name", sql.VarChar(200), data.dept_name)
+      .input("dept_status_active", sql.Bit, data.dept_status_active ? 1 : 0)
+      .input("dept_updated_by", sql.VarChar(100), updatedBy)
+      .input("dept_date_updated", sql.DateTime, new Date())
+      .query(`
+        UPDATE dbo.departments
+        SET 
+          dept_name = @dept_name,
+          dept_status_active = @dept_status_active,
+          dept_updated_by = @dept_updated_by,
+          dept_date_updated = @dept_date_updated
+        WHERE auto_id = @id
+      `);
+
+    await transaction.commit();
+
+  } catch (err) {
+    await transaction.rollback();
+    throw err;
+  }
+};

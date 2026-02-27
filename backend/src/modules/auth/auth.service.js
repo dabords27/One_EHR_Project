@@ -1,6 +1,8 @@
 const { sql } = require('../../config/db');
 const bcrypt = require('bcrypt');
+const jwt = require("jsonwebtoken");
 const login = async (pool, { username, password }) => {
+
 
   // 🔎 Find user (case-insensitive)
   const userResult = await pool.request()
@@ -54,17 +56,77 @@ const defaultDepartment = deptResult.recordset.length
   : null;
 
   // ✅ Return clean user object
+// 🔐 Generate JWT
+console.log("JWT_SECRET IN LOGIN:", process.env.JWT_SECRET);
+const token = jwt.sign(
+  {
+    id: dbUser.auto_id,
+    username: dbUser.usr_username,
+    role: dbUser.fk_usr_group_code
+  },
+  process.env.JWT_SECRET,
+  { expiresIn: "8h" }
+);
+
+// ✅ Return token + user data
 return {
-  id: dbUser.auto_id,
-  username: dbUser.usr_username,
-  fullName: `${dbUser.usr_last_name}, ${dbUser.usr_first_name}`,
-  role: String(dbUser.fk_usr_group_code).toUpperCase(),
-  status: dbUser.usr_status_active,
-  defaultDepartment, // object now
-  photo: dbUser.usr_photo_path || null
+  token,
+  user: {
+    id: dbUser.auto_id,
+    username: dbUser.usr_username,
+    fullName: `${dbUser.usr_last_name}, ${dbUser.usr_first_name}`,
+    role: String(dbUser.fk_usr_group_code).toUpperCase(),
+    status: dbUser.usr_status_active,
+    defaultDepartment,
+    photo: dbUser.usr_photo_path || null
+  }
 };
 };
 
+const verifyUser = async (pool, data) => {
+  const { username, password } = data;
+
+  const result = await pool.request()
+    .input('username', username)
+    .query(`
+      SELECT 
+        auto_id,
+        usr_username,
+        usr_password_hash,
+        usr_status_active
+      FROM dbo.users
+      WHERE usr_username = @username
+    `);
+
+  if (result.recordset.length === 0) {
+    throw new Error('Invalid username or password');
+  }
+
+  const user = result.recordset[0];
+
+  if (!user.usr_status_active) {
+    throw new Error('User is inactive');
+  }
+
+  const match = await bcrypt.compare(
+    password,
+    user.usr_password_hash
+  );
+
+  if (!match) {
+    throw new Error('Invalid username or password');
+  }
+
+  return {
+    success: true,
+    user: {
+      id: user.auto_id,
+      username: user.usr_username
+    }
+  };
+};
+
 module.exports = {
-  login
+  login,
+verifyUser
 };

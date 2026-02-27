@@ -2,7 +2,11 @@ const express = require('express');
 const router = express.Router();
 const authController = require('./auth.controller');
 
-// POST /api/auth/login
+
+// Existing login
 router.post('/login', authController.login);
+
+// NEW: verification for CRUD authentication
+router.post('/verify', authController.verifyUser);
 
 module.exports = router;
