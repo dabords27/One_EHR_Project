@@ -135,18 +135,18 @@ export const RecordForm: React.FC<RecordFormProps> = ({
         console.log("EDIT RECORD DATA:", data);
 
         /* Normalize patient */
-        const normalizedPatient: Patient = {
-          mrn: data.patient?.MRN,
-          first_name: data.patient?.Firstname,
-          middle_name: data.patient?.Middlename,
-          last_name: data.patient?.Lastname,
-          patient_type: data.patient?.PatientType,
-          date_admitted: data.patient?.AdmissionDateTime,
-          birthdate: data.patient?.Birthdate,
-          room_no: data.patient?.RoomNo,
-          sex: data.patient?.Sex,
-          case_id: data.patient?.CaseID
-        } as Patient;
+    const normalizedPatient: Patient = {
+  mrn: data.patient?.MRN,
+  first_name: data.patient?.Firstname,
+  middle_name: data.patient?.Middlename,
+  last_name: data.patient?.Lastname,
+  patient_type: data.patient?.PatientType,
+  date_admitted: data.patient?.AdmissionDateTime,
+  birthdate: data.patient?.Birthdate,
+  room_no: data.patient?.RoomNo,
+  sex: data.patient?.Sex,
+  case_id: data.patient?.CaseID
+} as Patient;
 
         /* Load filled form data */
         setFormData(data.filled_data || {});

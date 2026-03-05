@@ -27,10 +27,10 @@ const [isMinimized, setIsMinimized] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
   
   useEffect(() => {
-  console.log("CourseInWard MOUNTED");
+
 
   return () => {
-    console.log("CourseInWard UNMOUNTED");
+
   };
 }, []);
 

@@ -245,7 +245,7 @@ if (view === 'select-form' || view === 'create') {
       </Layout>
 
       {/* Floating Clinical Modules (Hidden on Setup) */}
-{activePatient && !['setup'].includes(currentView) && (
+{activePatient && !['setup', 'dashboard', 'view', 'audit'].includes(currentView) && (
   <>
     {showProgressNotes && (
 <ProgressNotesModule
@@ -261,12 +261,11 @@ if (view === 'select-form' || view === 'create') {
 
     {showCourseInWard && !isProgressMaximized && (
       <CourseInWardModule
-        key={`course-${activePatient.case_id}`}
-        patient={activePatient}
-        user={user}
-        forceMinimized={areClinicalModulesMinimized}
-        onClose={() => setShowCourseInWard(false)}
-      />
+  patient={activePatient}
+  user={user}
+  forceMinimized={areClinicalModulesMinimized}
+  onClose={() => setShowCourseInWard(false)}
+/>
     )}
   </>
 )}

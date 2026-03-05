@@ -1,5 +1,6 @@
 const sql = require("mssql");
 
+
 exports.saveDraft = async (req, res) => {
 
   const pool = req.app.locals.pool;
@@ -151,6 +152,34 @@ exports.getFormById = async (req, res) => {
 
     console.error("LOAD FORM ERROR:", err);
     res.status(500).json({ message: "Failed to load form" });
+
+  }
+
+};
+
+
+
+
+exports.getPatientRegistry = async (req, res) => {
+
+  try {
+
+    const pool = req.app.locals.pool;
+
+    const result = await pool.request()
+      .input("registryId", sql.Int, req.params.registryId)
+      .query(`
+        SELECT *
+        FROM dbo.PatientRegistry_Local
+        WHERE RegistryTrackingNo = @registryId
+      `);
+
+    res.json(result.recordset[0] || {});
+
+  } catch (err) {
+
+    console.error("REGISTRY LOAD ERROR:", err);
+    res.status(500).json({ error: "Failed to load registry" });
 
   }
 

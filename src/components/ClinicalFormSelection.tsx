@@ -19,7 +19,7 @@ export const ClinicalFormSelection: React.FC<Props> = ({
 }) => {
 
   const { user } = useAuth(); // adjust if your auth context differs
-  console.log("FULL USER OBJECT:", user);  // 👈 ADD IT HERE
+
 
   const [templates, setTemplates] = useState<FormTemplate[]>([]);
   const [activeTemplate, setActiveTemplate] = useState<FormTemplate | null>(null);

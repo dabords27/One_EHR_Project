@@ -24,89 +24,115 @@ export const CustomTemplateRenderer: React.FC<Props> = ({
   readOnly = false
 }) => {
 
-  console.log("==== CUSTOM RENDERER START ====");
-  console.log("TEMPLATE:", template);
-  console.log("FIELDS:", template?.fields);
-  console.log("PDF DIMENSIONS:", pdfDimensions);
-  console.log("CURRENT PAGE:", currentPage);
-  console.log("SYSTEM DATA:", systemData);
-
   if (!template) {
-    console.warn("No template provided");
+
     return null;
   }
 
   if (!template.fields || template.fields.length === 0) {
-    console.warn("No fields in template");
+
     return null;
   }
 
   if (!pdfDimensions) {
-    console.warn("PDF dimensions not ready");
+
     return null;
   }
 
 // 🔥 SYSTEM VALUE RESOLVER
 const resolveSystemValue = (bindingKey: string) => {
+
+  if (!bindingKey) return "";
+
+  const normalize = (v: string) =>
+    v?.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const normalizedSystem = Object.keys(systemData || {}).reduce((acc, key) => {
+    acc[normalize(key)] = systemData[key];
+    return acc;
+  }, {} as Record<string, any>);
+
+  const columnKey = bindingKey.split(".").pop();
+  if (!columnKey) return "";
+
+  const normalizedColumn = normalize(columnKey);
+
+  /* =============================
+     DIRECT MATCH
+  ============================= */
+
+  if (normalizedSystem[normalizedColumn] !== undefined) {
+    return normalizedSystem[normalizedColumn];
+  }
+
+  /* =============================
+     COMPUTED FIELDS (PRINT LOGIC)
+  ============================= */
+
+  if (bindingKey === "patient_name") {
+    return `${systemData.last_name || ""} ${systemData.first_name || ""} ${systemData.middle_name || ""}`.trim();
+  }
+
+  if (bindingKey === "age") {
+
+    if (!systemData.birthdate) return "";
+
+    const birth = new Date(systemData.birthdate);
+    const today = new Date();
+
+    const years = today.getFullYear() - birth.getFullYear();
+    const months = today.getMonth() - birth.getMonth();
+    const days = today.getDate() - birth.getDate();
+
+    return `${years}Y ${Math.abs(months)}M ${Math.abs(days)}D`;
+  }
+
+  if (bindingKey === "address") {
+    return [
+      systemData.barangay,
+      systemData.town_city,
+      systemData.province
+    ].filter(Boolean).join(", ");
+  }
+
+  if (bindingKey === "region_full") {
+    return `${systemData.region || ""}`;
+  }
+
+  /* =============================
+     REGISTRY LOOKUP
+  ============================= */
+
   for (const group of SYSTEM_FIELD_REGISTRY) {
+
     const found = group.fields.find(f => f.key === bindingKey);
 
-    if (found) {
-      // 🔥 SINGLE COLUMN
-      if (found.column) {
-        const columnName = found.column;
+    if (!found) continue;
 
-        if (systemData?.[columnName] !== undefined) {
-          return systemData[columnName];
-        }
+    if (found.column) {
 
-        const lower = columnName.toLowerCase();
-        if (systemData?.[lower] !== undefined) {
-          return systemData[lower];
-        }
+      const key = normalize(found.column);
+      return normalizedSystem[key] ?? "";
 
-        const snake = columnName
-          .replace(/([A-Z])/g, "_$1")
-          .toLowerCase()
-          .replace(/^_/, "");
-
-        if (systemData?.[snake] !== undefined) {
-          return systemData[snake];
-        }
-
-        return "";
-      }
-
-      // 🔥 MULTI COLUMN
-      if (found.columns) {
-        return found.columns
-          .map(col => {
-            if (systemData?.[col] !== undefined) return systemData[col];
-
-            const lower = col.toLowerCase();
-            if (systemData?.[lower] !== undefined) return systemData[lower];
-
-            const snake = col
-              .replace(/([A-Z])/g, "_$1")
-              .toLowerCase()
-              .replace(/^_/, "");
-
-            return systemData?.[snake] ?? "";
-          })
-          .filter(Boolean)
-          .join(" ");
-      }
     }
+
+    if (found.columns) {
+
+      return found.columns
+        .map(col => normalizedSystem[normalize(col)] ?? "")
+        .filter(Boolean)
+        .join(" ");
+
+    }
+
   }
 
   return "";
 };
-
   const pageFields = template.fields.filter(
     (field: any) => Number(field.page) === Number(currentPage)
   );
 
-  console.log("PAGE FIELDS:", pageFields);
 
   const commonInputClass =
     "w-full h-full text-[12px] border border-slate-300 px-2 py-1 bg-white";
@@ -121,14 +147,16 @@ const resolveSystemValue = (bindingKey: string) => {
 
         // 🔥 VALUE LOGIC FIX
 		if (isSystemField) {
-  console.log("SYSTEM FIELD DEBUG →");
-  console.log("Field Label:", field.label);
-  console.log("Binding:", field.systemBinding);
+
 }
 		
-        const value = isSystemField
-          ? resolveSystemValue(field.systemBinding)
-          : formData[field.id] || "";
+ const value = isSystemField
+  ? resolveSystemValue(field.systemBinding)
+  : formData[field.id] || "";
+
+// 🔍 DEBUG SYSTEM VALUE
+if (isSystemField) {
+}
 
 const style = {
   position: "absolute",
@@ -183,7 +211,7 @@ const style = {
               >
                 <option value="">Select</option>
                 {(field.options || []).map((opt: string, idx: number) => (
-                  <option key={idx} value={opt}>
+                  <option key={`${field.id}-${opt}`} value={opt}>
                     {opt}
                   </option>
                 ))}

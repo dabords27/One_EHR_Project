@@ -4,7 +4,6 @@ exports.getRepository = async (req, res) => {
   try {
 
     const records = await customService.getRepositoryRecords();
-
     res.json(records);
 
   } catch (err) {
@@ -14,6 +13,7 @@ exports.getRepository = async (req, res) => {
 
   }
 };
+
 
 exports.getPatientForm = async (req, res) => {
   try {
@@ -39,18 +39,11 @@ exports.getPatientForm = async (req, res) => {
       console.warn("Invalid filled_data JSON");
     }
 
-    res.json({
-      template,
-      patient: {
-        MRN: record.MRN,
-        Firstname: record.Firstname,
-        Middlename: record.Middlename,
-        Lastname: record.Lastname,
-        PatientType: record.PatientType,
-        AdmissionDateTime: record.AdmissionDateTime
-      },
-      filled_data: filledData
-    });
+res.json({
+  template,
+  patient: record,
+  filled_data: filledData
+});
 
   } catch (err) {
 

@@ -27,13 +27,10 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onSwitchDepartment, currentView, onNavigate }) => {
 
-  console.log("===== LAYOUT USER DEBUG =====");
-  console.log("FULL USER:", user);
-  console.log("USER.GROUP:", user?.group);
-  console.log("USER.ROLE:", user?.role);
+
 
 const { facility, activeDepartment } = useFacility();
-console.log("Facility Context:", facility); // 👈 ADD IT HERE
+
   const [isCollapsed, setIsCollapsed] = useState(false);
 const hasPhoto =
   user.profileImage &&

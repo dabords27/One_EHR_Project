@@ -37,11 +37,75 @@ export const CustomTemplateRuntimeModal: React.FC<Props> = ({
 }) => {
 
 
-console.log("PATIENT OBJECT:", patient);
+
+
+
   /* =========================
      STATE
   ========================= */
 const [formData, setFormData] = useState<Record<string, any>>(initialFormData || {});
+
+const [systemData, setSystemData] = useState<any>(patient);
+
+useEffect(() => {
+
+  const loadRegistry = async () => {
+
+    try {
+
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(
+        `${API_BASE}/api/custom-forms/patient/${patient.case_id}`,
+        {
+          headers: { Authorization: `Bearer ${token}` }
+        }
+      );
+
+      const data = await res.json();
+
+      if (data) {
+        setSystemData(data);
+      }
+
+    } catch (err) {
+
+      console.error("Failed to load registry", err);
+
+    }
+
+  };
+
+  if (patient?.case_id) {
+    loadRegistry();
+  }
+
+}, [patient.case_id]);
+
+useEffect(() => {
+
+  if (!systemData) return;
+
+  const mapped = {
+    ...systemData,
+
+    gender: systemData.sex,
+    room_bed: systemData.room_no,
+    room_bed_no: systemData.room_no,
+
+    arrival_datetime: systemData.date_admitted,
+    admission_datetime: systemData.date_admitted,
+    admission_date_time: systemData.date_admitted,
+
+    patient_name: `${systemData.last_name}, ${systemData.first_name} ${systemData.middle_name || ""}`
+  };
+
+  setSystemData(mapped);
+
+}, []);
+
+
+
 useEffect(() => {
   if (initialFormData) {
     setFormData(initialFormData);
@@ -61,6 +125,8 @@ useEffect(() => {
   const [status, setStatus] = useState<"DRAFT" | "FINALIZED">("DRAFT");
   const [pdfError, setPdfError] = useState<string | null>(null);
   const pdfRef = useRef<HTMLDivElement | null>(null);
+  
+  
 
 const formattedAdmission = patient?.date_admitted
   ? new Date(patient.date_admitted).toLocaleString("en-US", {
@@ -82,30 +148,21 @@ const [pdfDimensions, setPdfDimensions] = useState<{
 } | null>(null);
 
   const totalPages = template.total_pages || 1;
+  
+
 
   // ✅ BUILD PDF URL DIRECTLY FROM TEMPLATE ID
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
 
 const pdfUrl = `${API_BASE}/uploads/custom-forms/${template.template_id}/template.pdf`;
 
-console.log("FINAL PDF URL:", pdfUrl);
+
 
 const patientFullName = `${patient.last_name}, ${patient.first_name} ${patient.middle_name || ""}`
   .replace(/\s+/g, " ")
   .trim()
   .toUpperCase();
 
-const systemData = {
-  ...patient,
-  MRN: patient.mrn,
-  Firstname: patient.first_name,
-  Middlename: patient.middle_name,
-  Lastname: patient.last_name,
-  Birthdate: patient.birthdate,
-  RoomNo: patient.room_no,
-  Sex: patient.sex,
-  AdmissionDateTime: patient.date_admitted
-};
 
 
   /* =========================
@@ -175,7 +232,7 @@ const handleSaveDraft = async () => {
 
 const payload = {
 
-  patient_id: patient.case_id,   // FIX HERE
+  patient_id: patient.registry_tracking_no,   // FIX HERE
   template_id: template.template_id,
   department_id: department.department_id,
 
@@ -265,6 +322,8 @@ const handlePrint = () => {
   /* =========================
      RENDER
   ========================= */
+
+console.log("SYSTEM DATA", systemData);
 
   return (
     <div className="fixed inset-0 bg-white z-[9999] overflow-hidden">
@@ -381,7 +440,6 @@ const handlePrint = () => {
       <Document
         file={pdfUrl}
         onLoadError={(err) => {
-          console.error("PDF LOAD ERROR:", err);
           setPdfError("Failed to load PDF template.");
         }}
       >
@@ -416,8 +474,8 @@ const handlePrint = () => {
   formData={formData}
   systemData={systemData}
   currentPage={currentPage}
-pdfDimensions={pdfDimensions}
-  zoom={zoom}   // FIX HERE
+  pdfDimensions={pdfDimensions}
+  zoom={zoom}
   onChange={handleFieldChange}
   readOnly={status === "FINALIZED"}
 />

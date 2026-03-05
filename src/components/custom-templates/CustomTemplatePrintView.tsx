@@ -53,23 +53,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
 
         setTemplate(data.template_snapshot ?? data.template ?? null);
 
-        const rawPatient = data.patient_snapshot ?? data.patient ?? {};
-
-        const normalizedPatient: Patient = {
-          ...rawPatient,
-          mrn: rawPatient.MRN ?? rawPatient.mrn,
-          first_name: rawPatient.Firstname ?? rawPatient.first_name,
-          last_name: rawPatient.Lastname ?? rawPatient.last_name,
-          middle_name: rawPatient.Middlename ?? rawPatient.middle_name,
-          birthdate: rawPatient.Birthdate ?? rawPatient.birthdate,
-          room_no: rawPatient.RoomNo ?? rawPatient.room_no,
-          sex: rawPatient.Sex ?? rawPatient.sex,
-          patient_type: rawPatient.PatientType ?? rawPatient.patient_type,
-          date_admitted:
-            rawPatient.AdmissionDateTime ?? rawPatient.date_admitted
-        } as Patient;
-
-        setPatient(normalizedPatient);
+setPatient(data.patient ?? null);
 
         setFilledData(data.filled_data ?? {});
 
@@ -85,6 +69,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
 
   }, [recordId]);
 
+
   /* ================= CLOSE AFTER PRINT ================= */
 
   useEffect(() => {
@@ -97,7 +82,8 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
       window.removeEventListener("afterprint", handleAfterPrint);
     };
 
-  }, []);
+  }, [onClose]);
+
 
   /* ================= AUTO PRINT ================= */
 
@@ -113,6 +99,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
 
   }, [pdfDimensions]);
 
+
   /* ================= LOADING STATE ================= */
 
   if (!template || !patient) {
@@ -125,24 +112,9 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
 
   }
 
-  /* ================= SYSTEM DATA ================= */
-
-  const systemData = {
-    ...patient,
-
-    MRN: patient.mrn,
-    Firstname: patient.first_name,
-    Middlename: patient.middle_name,
-    Lastname: patient.last_name,
-
-    Birthdate: patient.birthdate,
-    RoomNo: patient.room_no,
-    Sex: patient.sex,
-
-    AdmissionDateTime: patient.date_admitted
-  };
 
   const pdfUrl = `${API_BASE}/uploads/custom-forms/${template.template_id}/template.pdf`;
+
 
   return (
 
@@ -175,6 +147,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
 
         </Document>
 
+
         {/* FIELD OVERLAY */}
 
         {pdfDimensions && (
@@ -192,7 +165,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
             <CustomTemplateRenderer
               template={template}
               formData={filledData}
-              systemData={systemData}
+             systemData={patient}
               currentPage={1}
               pdfDimensions={pdfDimensions}
               zoom={1}
@@ -205,6 +178,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
         )}
 
       </div>
+
 
       {/* ================= PRINT CSS ================= */}
 

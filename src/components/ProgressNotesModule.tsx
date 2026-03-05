@@ -76,9 +76,7 @@ const [showComposer, setShowComposer] = useState(true);
 
 const userType = (user.role || "").toUpperCase();
 
-console.log("PROGRESS USER OBJECT:", user);
-console.log("PROGRESS USER ROLE:", user.role);
-console.log("PROGRESS userType computed:", userType);
+
 
 // Date filter
 const today = new Date().toISOString().split("T")[0];

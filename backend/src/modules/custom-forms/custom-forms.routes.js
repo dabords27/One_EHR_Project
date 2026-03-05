@@ -8,6 +8,7 @@ const fs = require("fs");
 const { verifyToken } = require("../../../middleware/auth.middleware");
 const patientFormsController = require("./patient/patient-forms.controller");
 const controller = require('./custom-forms.controller');
+const patientController = require("./patient/patient-forms.controller");
 
 // ============================
 // MULTER STORAGE
@@ -43,6 +44,7 @@ router.get("/templates", verifyToken, templateController.getTemplates);
 router.post("/template", verifyToken, templateController.createTemplate);
 router.put("/template/:id", verifyToken, templateController.updateTemplate);
 router.get("/template/:id/departments", verifyToken, templateController.getTemplateDepartments);
+router.get("/patient/:registryId", patientController.getPatientRegistry);
 
 // ============================
 // FIELD ROUTES

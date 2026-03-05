@@ -1,27 +1,24 @@
-export const resolveSystemField = (
-  fieldConfig: any,
-  registryData: any
-) => {
+export const resolveSystemField = (fieldConfig, registryData) => {
   if (!registryData) return "";
-  
-  if (found.format === "date" && value) {
-  const parsed = new Date(value);
-  if (!isNaN(parsed.getTime())) {
-    return parsed.toISOString().split("T")[0];
-  }
-}
+
+  let value = "";
 
   if (fieldConfig.columns) {
-    return fieldConfig.columns
-      .map((col: string) => registryData[col] ?? "")
+    value = fieldConfig.columns
+      .map((col) => registryData[col] ?? "")
       .filter(Boolean)
       .join(" ")
       .trim();
+  } else if (fieldConfig.column) {
+    value = registryData[fieldConfig.column] ?? "";
   }
 
-  if (fieldConfig.column) {
-    return registryData[fieldConfig.column] ?? "";
+  if (fieldConfig.format === "date" && value) {
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString().split("T")[0];
+    }
   }
 
-  return "";
+  return value;
 };
