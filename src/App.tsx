@@ -12,6 +12,7 @@ import { ProgressNotesModule } from './components/ProgressNotesModule';
 import { CourseInWardModule } from './components/CourseInWardModule';
 import { ClinicalFormSelection } from './components/ClinicalFormSelection';
 import { User, Patient, Department, FormType } from './types';
+import { CustomTemplatePrintView } from "./components/custom-templates/CustomTemplatePrintView";
 
 const App: React.FC = () => {
 
@@ -28,6 +29,8 @@ const App: React.FC = () => {
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [showProgressNotes, setShowProgressNotes] = useState(true);
 const [showCourseInWard, setShowCourseInWard] = useState(true);
+const [isProgressMaximized, setIsProgressMaximized] = useState(false);
+const [printRecordId, setPrintRecordId] = useState<number | null>(null);
 
 /* ================= RESTORE SESSION ================= */
 
@@ -153,11 +156,11 @@ useEffect(() => {
 }
 
     // Minimize only on select-form and create
-    if (view === 'select-form' || view === 'create') {
-      setAreClinicalModulesMinimized(true);
-    } else {
-      setAreClinicalModulesMinimized(false);
-    }
+if (view === 'select-form' || view === 'create') {
+  setAreClinicalModulesMinimized(true);
+} else {
+  setAreClinicalModulesMinimized(false);
+}
   };
 
   /* ================= RENDER ================= */
@@ -214,45 +217,49 @@ useEffect(() => {
           />
         )}
 
-        {currentView === 'create' && activePatient && selectedFormType && (
-          <RecordForm
-            formType={selectedFormType}
-            onSuccess={() => navigateTo('view')}
-            editId={editRecordId}
-            selectedPatient={activePatient}
-            onCancel={() => navigateTo('dashboard')}
-            department={department}
-            setActivePatient={setActivePatient}
-            user={user}
-          />
-        )}
+{currentView === 'create' && (
+  <RecordForm
+    formType={selectedFormType ?? undefined}
+    onSuccess={() => navigateTo('view')}
+    editId={editRecordId}
+    selectedPatient={activePatient ?? undefined}
+    onCancel={() => navigateTo('dashboard')}
+    department={department}
+    setActivePatient={setActivePatient}
+    user={user}
+  />
+)}
 
-        {currentView === 'view' && (
-          <RecordList
-            user={user}
-            onEdit={(id) => navigateTo('create', id)}
-          />
-        )}
-
+{currentView === 'view' && (
+<RecordList
+  user={user}
+  onEdit={(id) => navigateTo("create", id)}
+  onPrint={(id) => {
+    setPrintRecordId(id);
+  }}
+/>
+)}
         {currentView === 'setup' && <Setup />}
         {currentView === 'audit' && <AuditTrail />}
 
       </Layout>
 
       {/* Floating Clinical Modules (Hidden on Setup) */}
-{activePatient && currentView !== 'setup' && (
+{activePatient && !['setup'].includes(currentView) && (
   <>
     {showProgressNotes && (
-      <ProgressNotesModule
-        key={`progress-${activePatient.case_id}`}
-        patient={activePatient}
-        user={user}
-        forceMinimized={areClinicalModulesMinimized}
-        onClose={() => setShowProgressNotes(false)}
-      />
+<ProgressNotesModule
+  key={`progress-${activePatient.case_id}`}
+  patient={activePatient}
+  user={user}
+  forceMinimized={areClinicalModulesMinimized}
+  isMaximizedGlobal={isProgressMaximized}
+  setIsMaximizedGlobal={setIsProgressMaximized}
+  onClose={() => setShowProgressNotes(false)}
+/>
     )}
 
-    {showCourseInWard && (
+    {showCourseInWard && !isProgressMaximized && (
       <CourseInWardModule
         key={`course-${activePatient.case_id}`}
         patient={activePatient}
@@ -263,7 +270,13 @@ useEffect(() => {
     )}
   </>
 )}
-
+{/* PRINT VIEW */}
+{printRecordId && (
+  <CustomTemplatePrintView
+    recordId={printRecordId}
+    onClose={() => setPrintRecordId(null)}
+  />
+)}
       <SignOutModal
         isOpen={isSignOutModalOpen}
         onConfirm={handleLogout}

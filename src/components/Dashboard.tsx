@@ -68,21 +68,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
       const response = await fetch(`/api/admissions?${params.toString()}`);
       const data = await response.json();
 
-      const mapped = data.map((item: any) => ({
-        case_id: item.RegistryNo,
-        mrn: item.MRN,
-        last_name: item.PatientName?.split(',')[0] || '',
-        first_name: item.PatientName?.split(',')[1] || '',
-        middle_name: '',
-        extension: '',
-        birthdate: item.Birthdate,
-        sex: item.Sex,
-        patient_type: item.PatientType,
-        room_no: item.RoomBedNo ?? '',
-        bed_no: '',
-        date_admitted: item.AdmissionDateTime,
-        status: item.Status
-      }));
+const mapped = data.map((item: any) => ({
+  case_id: item.RegistryNo,
+  mrn: item.MRN,
+
+  last_name: item.Lastname || '',
+  first_name: item.Firstname || '',
+  middle_name: item.Middlename || '',
+
+  Age: item.Age ?? '',
+  Age2: item.Age2 ?? null,
+    extension: item.Extension || '',
+  birthdate: item.Birthdate,
+  sex: item.Sex,
+  patient_type: item.PatientType,
+  room_no: item.RoomBedNo ?? '',
+  bed_no: '',
+  date_admitted: item.AdmissionDateTime,
+  status: item.Status
+}));
 
       setPatients(mapped);
     } catch (error) {
@@ -316,7 +320,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
                   </td>
 
                   <td className="px-3 py-4 text-sm font-black text-slate-900 uppercase group-hover:underline">
-                    {patient.last_name}, {patient.first_name}
+                    {patient.last_name}, {patient.first_name} {patient.middle_name} {patient.extension} 
                   </td>
 
                   <td className="px-3 py-4 text-xs font-bold text-slate-600 text-center">

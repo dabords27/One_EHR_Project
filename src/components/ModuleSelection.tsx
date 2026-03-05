@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState } from "react";
 import {
   Building2,
   ChevronRight,
-  LogOut,
   Sparkles
-} from 'lucide-react';
-import { Department } from '../types';
+} from "lucide-react";
+import { Department } from "../types";
+import { useFacility } from "../context/FacilityContext";
 
 interface ModuleSelectionProps {
   username: string;
@@ -27,14 +27,15 @@ export const ModuleSelection: React.FC<ModuleSelectionProps> = ({
   onSelectDepartment,
   onLogout
 }) => {
-
   const [departments, setDepartments] = useState<DeptFromAPI[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const aiBackground = sessionStorage.getItem('ai_login_bg');
+  const { setActiveDepartment } = useFacility();
 
+  const aiBackground = sessionStorage.getItem("ai_login_bg");
+
+  /* ================= FETCH DEPARTMENTS ================= */
   useEffect(() => {
-console.log("Fetching departments for:", username);
     const fetchDepartments = async () => {
       try {
         const res = await fetch(
@@ -50,38 +51,45 @@ console.log("Fetching departments for:", username);
       }
     };
 
-    fetchDepartments();
+    if (username) {
+      fetchDepartments();
+    }
   }, [username]);
 
+  /* ================= HANDLE SELECT ================= */
   const handleSelect = (dept: DeptFromAPI) => {
     const formatted: Department = {
-      id: dept.auto_id.toString(),
+      id: dept.auto_id, // 🔥 KEEP AS NUMBER
       name: dept.dept_name,
       code: dept.dept_code,
       description: dept.dept_name
     };
 
+    // Save to localStorage (optional persistence)
     localStorage.setItem("active_department", JSON.stringify(formatted));
+
+    // 🔥 Update global context (THIS FIXES YOUR ISSUE)
+    setActiveDepartment(formatted);
+
+    // Continue existing flow
     onSelectDepartment(formatted);
   };
 
   return (
     <div className="min-h-screen bg-[#f0f5fa] flex flex-col p-6 md:p-12 relative overflow-hidden">
-
-      {/* Subtle Background Overlay */}
+      {/* Background */}
       {aiBackground && (
         <div
           className="absolute inset-0 opacity-[0.03] grayscale pointer-events-none"
           style={{
             backgroundImage: `url(${aiBackground})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center',
+            backgroundSize: "cover",
+            backgroundPosition: "center"
           }}
         />
       )}
 
       <div className="max-w-6xl w-full mx-auto relative z-10">
-
         {/* HEADER */}
         <header className="flex justify-between items-center mb-12 animate-in fade-in slide-in-from-top-4 duration-700">
           <div>
@@ -100,8 +108,6 @@ console.log("Fetching departments for:", username);
               Select your assigned department
             </p>
           </div>
-
-         
         </header>
 
         {/* CONTENT */}
@@ -158,7 +164,6 @@ console.log("Fetching departments for:", username);
         <footer className="mt-20 text-center text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] border-t border-slate-200 pt-8">
           ONE EHR • ELECTRONIC HEALTH RECORD SYSTEM v1.0.4
         </footer>
-
       </div>
     </div>
   );

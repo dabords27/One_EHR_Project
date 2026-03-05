@@ -57,7 +57,7 @@ const [showPassword, setShowPassword] = useState(false);
   };
 
 return (
-  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999]">
+  <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[15000]">
 
     <div className="w-[420px] rounded-[28px] bg-gradient-to-br from-[#0f1c2f] to-[#0b1626] p-8 shadow-2xl border border-white/10">
 

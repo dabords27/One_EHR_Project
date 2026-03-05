@@ -5,6 +5,8 @@ import { TransactionOverlay, TransactionStatus } from "../TransactionOverlay";
 import { useAuth } from "../../context/AuthContext";
 import { AuthModal } from "../AuthModal";
 
+import { StatusConfirmationModal } from "../StatusConfirmationModal";
+
 interface Props {
   onBack: () => void;
   onManageTemplate: (templateId: number) => void;
@@ -21,6 +23,9 @@ export const CustomFormManagement: React.FC<Props> = ({
   const [departments, setDepartments] = useState<any[]>([]);
 const [selectedDepartments, setSelectedDepartments] = useState<number[]>([]);
 
+const [pendingToggleId, setPendingToggleId] = useState<number | null>(null);
+const [pendingToggleValue, setPendingToggleValue] = useState<boolean | null>(null);
+
 const [isEditMode, setIsEditMode] = useState(false);
 const [editingTemplateId, setEditingTemplateId] = useState<number | null>(null);
 
@@ -31,6 +36,16 @@ const [txMsg, setTxMsg] = useState("");
 
 const [showAuthModal, setShowAuthModal] = useState(false);
 const [pendingSave, setPendingSave] = useState(false);
+
+const [statusModal, setStatusModal] = useState<{
+  isOpen: boolean;
+  template: any | null;
+  action: "activate" | "deactivate" | null;
+}>({
+  isOpen: false,
+  template: null,
+  action: null
+});
   
   const [subtitle, setSubtitle] = useState(
     () =>
@@ -84,8 +99,10 @@ const fetchDepartments = async () => {
 
 
 const fetchTemplates = async () => {
+
   try {
     const res = await fetch(
+	
       `${import.meta.env.VITE_API_URL}/api/custom-forms/templates`,
       {
         headers: getAuthHeaders()
@@ -94,8 +111,14 @@ const fetchTemplates = async () => {
 
     if (!res.ok) throw new Error("Failed to fetch templates");
 
-    const data = await res.json();
-    setTemplates(data);
+const data = await res.json();
+
+const mapped = data.map((t: any) => ({
+  ...t,
+  is_active: t.is_active === true || t.is_active === 1// ✅ force real boolean
+}));
+
+setTemplates(mapped);
 
   } catch (err) {
     console.error(err);
@@ -112,8 +135,17 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
   setShowAuthModal(false);
 
   const startTime = Date.now();
-  setTxStatus("loading");
+setTxStatus("loading");
+
+if (statusModal.template) {
+  setTxMsg(
+    statusModal.action === "activate"
+      ? "Activating custom form..."
+      : "Deactivating custom form..."
+  );
+} else if (pendingSave) {
   setTxMsg("Syncing custom form data...");
+}
 
   try {
 
@@ -143,6 +175,31 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
 
       setPendingSave(false);
     }
+	
+if (statusModal.template) {
+
+  const newStatus = statusModal.action === "activate";
+
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL}/api/custom-forms/template/${statusModal.template.template_id}/status`,
+    {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        is_active: newStatus,
+        updated_by: verifiedUser.id
+      })
+    }
+  );
+
+  if (!res.ok) throw new Error("Status update failed");
+
+  setStatusModal({
+    isOpen: false,
+    template: null,
+    action: null
+  });
+}
 
     const elapsed = Date.now() - startTime;
     const remaining = Math.max(1000 - elapsed, 0);
@@ -316,6 +373,7 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
 >
   <option value="A4">A4</option>
   <option value="Letter">Letter</option>
+  <option value="Folio">Folio</option>
 </select>
             </div>
 
@@ -372,7 +430,7 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
                 onClick={() => setShowForm(false)}
                 className="px-8 py-3 bg-slate-100 text-slate-600 font-black text-xs uppercase rounded-xl hover:bg-slate-200 transition-all"
               >
-                Cancel
+                Cancel Entry
               </button>
 
               <button 
@@ -400,7 +458,7 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
     No Templates Yet
   </div>
 ) : (
-  <table className="w-full table-fixed text-left">
+  <table className="w-full text-left">
     <thead>
       <tr className="bg-slate-50 border-b border-slate-200">
         <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
@@ -408,6 +466,9 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
         </th>
         <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
           Pages
+        </th>
+		  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
+          Paper Size
         </th>
         <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
           Orientation
@@ -431,6 +492,10 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
 
   <td className="px-8 py-5 text-center font-black text-slate-700 uppercase text-sm">
     {t.total_pages}
+  </td>
+
+  <td className="px-8 py-5 text-center font-black text-slate-700 uppercase text-sm">
+    {t.paper_size}
   </td>
 
   <td className="px-8 py-5 text-center font-black text-slate-700 uppercase text-sm">
@@ -489,9 +554,28 @@ onClick={async () => {
       className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 hover:bg-black text-white font-black text-[10px] uppercase rounded-lg transition-all shadow-sm"
     >
       <Wrench size={14} />
-      Template Builder
+      Builder
     </button>
 
+{/* ACTIVE TOGGLE */}
+<button
+  onClick={() =>
+    setStatusModal({
+      isOpen: true,
+      template: t,
+      action: t.is_active ? "deactivate" : "activate"
+    })
+  }
+  className={`w-12 h-6 flex items-center rounded-full p-1 transition-all duration-300 ${
+    t.is_active ? "bg-emerald-600" : "bg-slate-300"
+  }`}
+>
+  <div
+    className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform duration-300 ${
+      t.is_active ? "translate-x-6" : "translate-x-0"
+    }`}
+  />
+</button>
   </div>
 </td>
 </tr>
@@ -501,6 +585,22 @@ onClick={async () => {
 )}
         </div>
       )}
+	  <StatusConfirmationModal
+  isOpen={statusModal.isOpen}
+  targetName={statusModal.template?.template_name || ""}
+  action={statusModal.action}
+  onConfirm={() => {
+    setShowAuthModal(true);
+  }}
+  onCancel={() =>
+    setStatusModal({
+      isOpen: false,
+      template: null,
+      action: null
+    })
+  }
+/>
+	  
 {showAuthModal && (
   <AuthModal
     currentUsername={user?.username || ""}

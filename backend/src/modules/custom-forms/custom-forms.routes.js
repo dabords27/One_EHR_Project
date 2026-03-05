@@ -1,12 +1,18 @@
 const express = require("express");
 const router = express.Router();
 const templateController = require("./template/template.controller");
+const fieldController = require("./template/field.controller");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const { verifyToken } = require("../../../middleware/auth.middleware");
+const patientFormsController = require("./patient/patient-forms.controller");
+const controller = require('./custom-forms.controller');
 
+// ============================
+// MULTER STORAGE
+// ============================
 
-// Storage config
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     const templateId = req.params.id;
@@ -22,58 +28,85 @@ const storage = multer.diskStorage({
 
     cb(null, uploadPath);
   },
- filename: function (req, file, cb) {
-  const pageNumber = req.body.page_number || 1;
-  cb(null, `page_${pageNumber}.pdf`);
+filename: function (req, file, cb) {
+  cb(null, `template.pdf`);
 }
 });
 
 const upload = multer({ storage });
 
-// Routes
-router.get("/templates", templateController.getTemplates);
+// ============================
+// TEMPLATE ROUTES
+// ============================
 
-router.post("/template", templateController.createTemplate);
+router.get("/templates", verifyToken, templateController.getTemplates);
+router.post("/template", verifyToken, templateController.createTemplate);
+router.put("/template/:id", verifyToken, templateController.updateTemplate);
+router.get("/template/:id/departments", verifyToken, templateController.getTemplateDepartments);
 
-router.put("/template/:id", templateController.updateTemplate); // ✅ ADD THIS
+// ============================
+// FIELD ROUTES
+// ============================
+
+router.get("/template/:id/fields", verifyToken, fieldController.getAllFields);
+router.post("/template/:id/sync-fields", verifyToken, fieldController.syncTemplateFields);
+router.post("/template/:id/field", verifyToken, fieldController.createField);
+router.get("/repository", controller.getRepository);
+
+// ============================
+// FILE UPLOAD
+// ============================
 
 router.post(
   "/template/:id/upload-page",
+  verifyToken,
   upload.single("pdf"),
   templateController.uploadTemplatePage
 );
 
-router.get(
-  "/template/:id/departments",
-  templateController.getTemplateDepartments
-);
+// ============================
+// TOGGLE
+// ============================
 
-// ✅ TEST ROUTE
-router.get("/test", (req, res) => {
-  res.json({ message: "Custom Forms API working" });
+router.put("/template/:id/status", verifyToken, async (req, res) => {
+  const { id } = req.params;
+  const { is_active, updated_by } = req.body;
+
+  const pool = req.app.locals.pool;
+  const sql = require("mssql");
+
+  try {
+    await pool.request()
+      .input("id", sql.Int, id)
+      .input("is_active", sql.Bit, is_active)
+      .input("updated_by", sql.Int, updated_by)
+      .query(`
+        UPDATE dbo.CustomFormTemplates
+        SET is_active = @is_active,
+            updated_by = @updated_by,
+            date_updated = GETDATE()
+        WHERE template_id = @id
+      `);
+
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("STATUS UPDATE ERROR:", err);
+    res.status(500).json({ message: "Status update failed" });
+  }
 });
 
 
-// Routes
-router.post("/template", templateController.createTemplate);
-router.post(
-  "/template/:id/upload-page",
-  upload.single("pdf"),
-  templateController.uploadTemplatePage
-);
 
-const fieldController = require("./template/field.controller");
+// ============================
+// PATIENT FORMS
+// ============================
 
-router.post(
-  "/template/:id/field",
-  fieldController.createField
-);
+router.post("/patient-form/draft", verifyToken, patientFormsController.saveDraft);
 
-router.get(
-  "/template/:id/fields",
-  templateController.getFieldsByPage
-);
+router.post("/patient-form/finalize", verifyToken, patientFormsController.finalizeForm);
 
+router.get("/patient-form/patient/:patientId", verifyToken, patientFormsController.getPatientForms);
 
-
+router.get("/patient-form/:id", verifyToken, controller.getPatientForm);
 module.exports = router;

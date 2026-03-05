@@ -1,8 +1,13 @@
 import React, { useState } from "react";
+import { AuthModal } from "../AuthModal";
 import { ArrowLeft } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { SYSTEM_FIELD_REGISTRY } from "../../utils/systemFieldRegistry";
 import { Rnd } from "react-rnd";
+import { useEffect } from "react";
+import { useMemo } from "react";
+import { useAuth } from "../../context/AuthContext";
+import { TransactionOverlay } from "../TransactionOverlay";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
@@ -13,68 +18,506 @@ interface Props {
   onBack: () => void;
 }
 
+interface TemplateField {
+  id: string; // UUID
+fieldUUID: string; // new
+  type: string;
+  page: number;
+
+  xPercent: number;
+  yPercent: number;
+  widthPercent: number;
+  heightPercent: number;
+
+  fieldName: string;
+  label: string;
+  placeholder: string;
+options?: string[];
+  dataSource: "manual" | "system";
+  systemBinding: string | null;
+
+  required: boolean;
+
+  fontSize: number;
+  fontWeight: string;
+  fontStyle: string;
+  textAlign: string;
+  fontFamily: string;
+  
+  dateMode?: "date" | "time" | "datetime";
+autoNow?: boolean;
+minDate?: string | null;
+maxDate?: string | null;
+isBirthdate?: boolean;
+  listOrientation?: "vertical" | "horizontal";
+    imageWidth?: number;
+imageHeight?: number;
+resultType?: "number" | "decimal" | "percentage";
+
+  maxLength: number | null;
+  formulaExpression?: string;
+formulaError?: string | null;
+inputType?: "text" | "number" | "decimal" | "percentage";
+}
+
 export const TemplateBuilder: React.FC<Props> = ({
+
   templateId,
   onBack
 }) => {
   
+  const { user } = useAuth();
+  console.log("AUTH USER:", user);
+  const [txStatus, setTxStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
+const [txMsg, setTxMsg] = useState("");
+  const generateFieldName = (label: string) => {
+  return label
+    .toLowerCase()
+    .replace(/[^a-z0-9 ]/g, "")
+    .replace(/\s+/g, "_");
+};
+
+const loadFields = async () => {
+  try {
+    const token = localStorage.getItem("token");
+
+const response = await fetch(
+  `${API_BASE}/api/custom-forms/template/${templateId}/fields?page_number=${currentPage}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    );
+
+    if (!response.ok) throw new Error("Failed to load fields");
+
+    const data = await response.json();
+
+const mappedFields: TemplateField[] = data.map((field: any) => ({
+  id: String(field.field_id),
+  fieldUUID: String(field.field_id),
+  type: field.field_type,
+  page: field.page_number,
+
+  xPercent: field.x,
+  yPercent: field.y,
+  widthPercent: field.width,
+  heightPercent: field.height,
+
+  fieldName: field.field_key,
+
+  label: field.label,
+  placeholder: field.placeholder || "",
+
+  options: field.options || undefined,
+
+  dataSource: field.data_source || "manual",
+  systemBinding: field.system_binding || null,
+
+  required: field.is_required,
+  fontSize: field.font_size,
+  fontWeight: field.font_weight || "normal",
+  fontStyle: field.font_style || "normal",
+  textAlign: field.text_align || "left",
+  fontFamily: field.font_family || "Calibri",
+
+  inputType: field.input_type || "text",
+  resultType: field.result_type || "number",
+
+  dateMode: field.date_mode || "date",
+  autoNow: field.auto_now || false,
+  minDate: field.min_date || null,
+  maxDate: field.max_date || null,
+  isBirthdate: field.is_birthdate || false,
+
+  listOrientation: field.list_orientation || "vertical",
+
+  maxLength: field.max_length || null,
+
+  formulaExpression:
+    field.field_type === "formula"
+      ? field.formula_expression || ""
+      : undefined,
+
+  formulaError: null
+}));
+
+    setFields(mappedFields);
+  } catch (err) {
+    console.error("LOAD FIELDS ERROR:", err);
+  }
+};
+
 const [pdfFile, setPdfFile] = useState<File | null>(null);
 const [numPages, setNumPages] = useState<number>(0);
 const [currentPage, setCurrentPage] = useState<number>(1);
-const [scale, setScale] = useState<number>(1);
-const [selectedField, setSelectedField] = useState<any>(null);
-const [fields, setFields] = useState<any[]>([]);
+const [scale, setScale] = useState<number>(2);
+const [selectedField, setSelectedField] = useState<TemplateField | null>(null);
+const [fields, setFields] = useState<TemplateField[]>([]);
+const hasDuplicateLabels = () => {
+  const labels = fields.map(f => f.label.trim().toLowerCase());
+  return new Set(labels).size !== labels.length;
+};
+const [labelError, setLabelError] = useState<string | null>(null);
+const [showAuthModal, setShowAuthModal] = useState(false);
+const [isSaving, setIsSaving] = useState(false);
+const [txKey, setTxKey] = useState(0);
+const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+const [imageToDelete, setImageToDelete] = useState<string | null>(null);
+const [isPreviewMode, setIsPreviewMode] = useState(false);
+const [previewValues, setPreviewValues] = useState<Record<string, any>>({});
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+
+
+
+const pdfFileSource = useMemo(() => ({
+  url: `${API_BASE}/uploads/custom-forms/${templateId}/template.pdf?t=${Date.now()}`
+}), [templateId]);
 const [pdfDimensions, setPdfDimensions] = useState<{
   width: number;
   height: number;
 } | null>(null);
 
 const addField = (type: string) => {
-  const newField = {
-  id: Date.now(),
-  type,
-  page: currentPage,
+  const uniqueId =
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : "id_" + Math.random().toString(36).substring(2, 11);
 
-  xPercent: 0.2,
-  yPercent: 0.2,
-  widthPercent: 0.15,
-  heightPercent: 0.05,
+  const baseName = generateFieldName(type);
 
-  label: `${type} field`,
-  dataSource: "manual",
-  systemBinding: null,
-  required: false
-};
+  const newField: TemplateField = {
+    id: uniqueId,
+    fieldUUID: uniqueId,
+    type,
+    page: currentPage,
+
+    xPercent: 0.2,
+    yPercent: 0.2,
+    widthPercent: 0.15,
+    heightPercent: 0.05,
+
+    fieldName: `${baseName}_${uniqueId}`,
+    label: `${type} field`,
+    placeholder: "",
+
+    options:
+      type === "select" ||
+      type === "list" ||
+      type === "radio_button"
+        ? []
+        : undefined,
+
+    listOrientation: "vertical",
+
+    dataSource: "manual",
+    systemBinding: null,   // 🔥 MUST be null
+
+    required: false,
+
+    fontSize: 12,
+    fontWeight: "normal",
+    fontStyle: "normal",
+    textAlign: "left",
+    fontFamily: "Calibri, Arial, sans-serif",
+
+    dateMode: "date",
+    autoNow: false,
+    minDate: null,
+    maxDate: null,
+    isBirthdate: false,
+
+    maxLength: null
+  };
 
   setFields(prev => [...prev, newField]);
 };
+const saveFields = async (verifiedUser: any) => {
+  // 🚫 BLOCK IF DUPLICATE LABEL EXISTS
+ if (hasDuplicateLabels()) {
+    setTxStatus("error");
+    setTxMsg("Duplicate labels detected. Please fix before saving.");
+    setTimeout(() => setTxStatus("idle"), 2000);
+    return;
+  }
+  try {
+    setIsSaving(true);
 
+    setTxKey(prev => prev + 1);
+    setTxStatus("loading");
+    setTxMsg("Syncing fields...");
+
+    const startTime = Date.now();
+
+    const token = localStorage.getItem("token");
+
+    const response = await fetch(
+  `${API_BASE}/api/custom-forms/template/${templateId}/sync-fields`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          page_number: currentPage,
+          fields: fields.filter(f => f.page === currentPage),
+          created_by: verifiedUser.id
+        })
+      }
+    );
+
+    if (!response.ok) throw new Error("Sync failed");
+
+    // 🔥 Ensure loading shows at least 600ms
+    const elapsed = Date.now() - startTime;
+    const minTime = 600;
+
+    if (elapsed < minTime) {
+      await new Promise(res => setTimeout(res, minTime - elapsed));
+    }
+
+    setTxStatus("success");
+    setTxMsg("Fields synced successfully.");
+
+    setTimeout(() => setTxStatus("idle"), 1500);
+
+  } catch (err) {
+    setTxStatus("error");
+    setTxMsg("Sync failed.");
+    setTimeout(() => setTxStatus("idle"), 2000);
+  } finally {
+    setIsSaving(false);
+  }
+};
 const FIELD_TYPES = [
   { type: "label", label: "Label", icon: "T" },
-  { type: "title", label: "Title", icon: "T+" },
-  { type: "paragraph", label: "Paragraph", icon: "¶" },
-  { type: "list", label: "List", icon: "≡" },
-  { type: "checkbox", label: "Checkbox", icon: "☑" },
   { type: "input_text", label: "Input Text", icon: "⌨" },
   { type: "textarea", label: "Input Textarea", icon: "📝" },
-  { type: "select", label: "Input Select", icon: "▾" },
+  { type: "select", label: "Dropdown", icon: "▾" },
+  { type: "checkbox", label: "Checkbox", icon: "☑" },
+    { type: "list", label: "List", icon: "≡" },
   { type: "date", label: "Date / Time", icon: "📅" },
+  { type: "radio_button", label: "Radio Button", icon: "⏺" },
+  { type: "formula", label: "Formula", icon: "%" },
   { type: "image", label: "Image", icon: "🖼" },
-  { type: "annotation", label: "Annotation", icon: "✎" },
-  { type: "table", label: "Table", icon: "▦" },
-  { type: "system_user", label: "System User", icon: "👤" },
-  { type: "order_button", label: "Order Button", icon: "⏺" }
+  { type: "system_user", label: "System User", icon: "👤" }
 ];
 
+const isDuplicateLabel = (label: string, currentId?: string) => {
+  const normalized = label.trim().toLowerCase();
+
+  return fields.some(f =>
+    f.id !== currentId &&
+    f.label.trim().toLowerCase() === normalized
+  );
+};
+
 const updateSelectedField = (updates: any) => {
+  if (!selectedField) return;
+
   setFields(prev =>
-    prev.map(f =>
-      f.id === selectedField.id ? { ...f, ...updates } : f
-    )
+    prev.map(f => {
+      if (f.id !== selectedField.id) return f;
+
+      let updatedField = { ...f, ...updates };
+
+  if (updates.label !== undefined) {
+  const duplicate = isDuplicateLabel(updates.label, f.id);
+
+  if (duplicate) {
+    setLabelError("This label is already used in this template.");
+  } else {
+    setLabelError(null);
+  }
+
+  const newBase = generateFieldName(updates.label);
+  updatedField.fieldName = `${newBase}_${f.fieldUUID}`;
+}
+
+      return updatedField;
+    })
   );
 
-  setSelectedField(prev => ({ ...prev, ...updates }));
+  setSelectedField(prev => {
+    if (!prev) return prev;
+
+    let updated = { ...prev, ...updates };
+
+  if (updates.label !== undefined) {
+  const duplicate = isDuplicateLabel(updates.label, prev.id);
+
+  if (duplicate) {
+    setLabelError("This label is already used in this template.");
+  } else {
+    setLabelError(null);
+  }
+
+  const newBase = generateFieldName(updates.label);
+  updated.fieldName = `${newBase}_${prev.fieldUUID}`;
+}
+
+    return updated;
+  });
 };
+const computeFormula = (field: TemplateField) => {
+  if (!field.formulaExpression?.trim()) return "";
+
+  try {
+    let expression = field.formulaExpression;
+
+    // 🔥 AGE(fieldName) support
+    const ageMatch = expression.match(/AGE\((.*?)\)/);
+
+    if (ageMatch) {
+      const birthFieldName = ageMatch[1].trim();
+
+      const birthField = fields.find(
+        f => f.fieldName === birthFieldName
+      );
+
+      if (birthField) {
+        const birthValue = previewValues[birthField.id];
+        const age = computeAge(birthValue);
+
+        expression = expression.replace(ageMatch[0], age.toString());
+      }
+    }
+
+    // 🔹 Existing numeric replacement
+    fields.forEach(f => {
+      let value = previewValues[f.id];
+
+      if (value === undefined || value === "") {
+        value = 0;
+      }
+
+      if (typeof value === "string" && value.endsWith("%")) {
+        value = value.replace("%", "");
+      }
+
+      if (isNaN(Number(value))) {
+        value = 0;
+      }
+
+      const safeValue = Number(value).toString();
+
+      const nameRegex = new RegExp(`\\b${f.fieldName}\\b`, "g");
+      expression = expression.replace(nameRegex, safeValue);
+    });
+
+    if (!/^[0-9+\-*/().\s]+$/.test(expression)) {
+      throw new Error("Invalid characters");
+    }
+
+    const result = Function(`"use strict"; return (${expression})`)();
+
+    if (isNaN(result)) return "Invalid";
+
+    if (field.resultType === "percentage") {
+      return result + "%";
+    }
+
+    return result;
+
+  } catch (err: any) {
+    return err.message || "Error";
+  }
+}; 
+
+useEffect(() => {
+  if (isPreviewMode) {
+ 
+    setSelectedField(null);
+  }
+}, [isPreviewMode]);
+
+useEffect(() => {
+  if (templateId) {
+    loadFields();
+  }
+}, [templateId, currentPage]);
+
+useEffect(() => {
+  const handleKeyDown = (e: KeyboardEvent) => {
+   if (!selectedField) return;
+if (isPreviewMode) return;
+if (!pdfDimensions) return;
+
+// 🔥 DO NOT MOVE if user is typing inside input/textarea/select
+const active = document.activeElement as HTMLElement;
+
+if (
+  active &&
+  (
+    active.tagName === "INPUT" ||
+    active.tagName === "TEXTAREA" ||
+    active.tagName === "SELECT" ||
+    active.isContentEditable
+  )
+) {
+  return;
+}
+
+    const arrowKeys = [
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight"
+    ];
+
+    if (!arrowKeys.includes(e.key)) return;
+
+    // 🛑 STOP PAGE SCROLL
+    e.preventDefault();
+
+    const step = e.shiftKey ? 10 : 1;
+
+    setFields(prev =>
+      prev.map(field => {
+        if (field.id !== selectedField.id) return field;
+
+        let deltaX = 0;
+        let deltaY = 0;
+
+        switch (e.key) {
+          case "ArrowUp":
+            deltaY = -step;
+            break;
+          case "ArrowDown":
+            deltaY = step;
+            break;
+          case "ArrowLeft":
+            deltaX = -step;
+            break;
+          case "ArrowRight":
+            deltaX = step;
+            break;
+        }
+
+        const newX = Math.max(
+          0,
+          field.xPercent * pdfDimensions.width + deltaX
+        );
+
+        const newY = Math.max(
+          0,
+          field.yPercent * pdfDimensions.height + deltaY
+        );
+
+        return {
+          ...field,
+          xPercent: newX / pdfDimensions.width,
+          yPercent: newY / pdfDimensions.height
+        };
+      })
+    );
+  };
+
+  window.addEventListener("keydown", handleKeyDown);
+  return () => window.removeEventListener("keydown", handleKeyDown);
+}, [selectedField, pdfDimensions, isPreviewMode]);
 
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-100">
@@ -92,16 +535,45 @@ const updateSelectedField = (updates: any) => {
       <ArrowLeft size={18} />
     </button>
 
-    <input
-      type="file"
-      accept="application/pdf"
-      onChange={(e) => {
-        if (e.target.files && e.target.files[0]) {
-          setPdfFile(e.target.files[0]);
-        }
-      }}
-      className="text-xs"
-    />
+<input
+  type="file"
+  accept="application/pdf"
+  onChange={async (e) => {
+    if (!e.target.files || !e.target.files[0]) return;
+
+    const file = e.target.files[0];
+
+    // 🔥 Show preview immediately
+    setPdfFile(file);
+
+    const formData = new FormData();
+    formData.append("pdf", file);
+
+
+ const token = localStorage.getItem("token");
+
+const response = await fetch(
+  `${API_BASE}/api/custom-forms/template/${templateId}/upload-page`,
+  {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`
+    },
+    body: formData
+  }
+);
+
+    if (!response.ok) {
+      alert("Upload failed");
+      return;
+    }
+
+    // 🔥 Clear local preview so it reloads from server
+    setPdfFile(null);
+
+  }}
+  className="text-xs"
+/>
 
   </div>
 
@@ -141,6 +613,8 @@ const updateSelectedField = (updates: any) => {
       </button>
     </div>
 
+
+
     {/* PAGE */}
     <div className="flex items-center gap-2">
       <button
@@ -162,6 +636,42 @@ const updateSelectedField = (updates: any) => {
       >
         Next
       </button>
+<div className="flex bg-slate-100 rounded-xl p-1 text-xs font-bold">
+  <button
+    onClick={() => setIsPreviewMode(false)}
+    className={`px-3 py-1 rounded-lg transition ${
+      !isPreviewMode
+        ? "bg-white shadow text-slate-800"
+        : "text-slate-500"
+    }`}
+  >
+    Builder
+  </button>
+
+  <button
+    onClick={() => setIsPreviewMode(true)}
+    className={`px-3 py-1 rounded-lg transition ${
+      isPreviewMode
+        ? "bg-white shadow text-slate-800"
+        : "text-slate-500"
+    }`}
+  >
+    Preview
+  </button>
+</div>
+ <button
+  onClick={() => setShowAuthModal(true)}
+  disabled={isSaving || !!labelError}
+className={`px-4 py-2 text-xs font-bold rounded-lg ${
+  isSaving || labelError
+    ? "bg-slate-400 cursor-not-allowed"
+    : "bg-emerald-600 hover:bg-emerald-700"
+} text-white`}
+>
+  {isSaving ? "Syncing..." : "Save Fields"}
+</button>
+
+
     </div>
 
   </div>
@@ -182,12 +692,21 @@ const updateSelectedField = (updates: any) => {
   {/* FIELD LIST */}
   <div className="flex-1 overflow-y-auto py-2">
 
-    {FIELD_TYPES.map((field) => (
-      <button
-        key={field.type}
-        onClick={() => addField(field.type)}
-        className="w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black uppercase text-slate-600 hover:bg-slate-50 transition-all"
-      >
+   {FIELD_TYPES.map((field) => (
+  <button
+    key={field.type}
+    onClick={() => {
+      if (!isPreviewMode) {
+        addField(field.type);
+      }
+    }}
+    disabled={isPreviewMode}
+    className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black uppercase transition-all ${
+      isPreviewMode
+        ? "opacity-40 cursor-not-allowed"
+        : "text-slate-600 hover:bg-slate-50"
+    }`}
+  >
         <div className="w-6 h-6 flex items-center justify-center bg-slate-100 rounded-md text-[10px] font-black">
           {field.icon}
         </div>
@@ -203,166 +722,1067 @@ const updateSelectedField = (updates: any) => {
 
      {/* PDF AREA */}
 <div className="flex-1 overflow-auto bg-slate-100 py-10">
-
   <div className="max-w-[1100px] mx-auto flex justify-center">
 
-    {pdfFile ? (
-      <Document
-  file={pdfFile}
-  onLoadSuccess={({ numPages }) => {
-    setNumPages(numPages);
-    setCurrentPage(1);
-  }}
->
-  <div className="relative shadow-2xl bg-white inline-block">
+    <Document
+     
+      file={pdfFile ?? pdfFileSource}
+      onLoadSuccess={(pdf) => {
+        setNumPages(pdf.numPages);
+      }}
+      onLoadError={() => {
+        setNumPages(0);
+      }}
+    >
+      <div className="relative shadow-2xl bg-white inline-block">
 
-   <Page
-  pageNumber={currentPage}
-  scale={scale}
-  renderTextLayer={false}
-  renderAnnotationLayer={false}
-  onLoadSuccess={(page) => {
-    const { width, height } = page;
-    setPdfDimensions({ width, height });
+        <Page
+          pageNumber={currentPage}
+          scale={scale}
+          renderTextLayer={false}
+          renderAnnotationLayer={false}
+          onLoadSuccess={(page) => {
+            const { width, height } = page;
+            setPdfDimensions({ width, height });
+          }}
+        />
+{/* FIELD OVERLAY */}
+<div className="absolute inset-0 z-10">
+  {fields
+    .filter(f => f.page === currentPage)
+    .map(field => {
+
+if (isPreviewMode) {
+const isSystemField = field.dataSource === "system";
+  return (
+    <div
+      key={field.id}
+      style={{
+        position: "absolute",
+        width: pdfDimensions
+          ? field.widthPercent * pdfDimensions.width
+          : 100,
+        height: pdfDimensions
+          ? field.heightPercent * pdfDimensions.height
+          : 30,
+        left: pdfDimensions
+          ? field.xPercent * pdfDimensions.width
+          : 0,
+        top: pdfDimensions
+          ? field.yPercent * pdfDimensions.height
+          : 0,
+      }}
+      className={`text-xs ${
+  field.type !== "system_user"
+    ? "border border-slate-300 bg-white overflow-hidden"
+    : ""
+}`}
+    >
+
+{/* INPUT TEXT (Preview Mode - Typed Validation) */}
+{field.type === "input_text" && (() => {
+
+
+  // 🔹 PERCENTAGE
+  if (field.inputType === "percentage") {
+    const currentValue = previewValues[field.id] ?? "";
+
+    return (
+      <input
+        type="text"
+		disabled={isSystemField}
+        value={currentValue}
+        placeholder={field.placeholder || ""}
+        onChange={(e) => {
+          let value = e.target.value.replace("%", "");
+          value = value.replace(/[^0-9.]/g, "");
+
+          const parts = value.split(".");
+          if (parts.length > 2) {
+            value = parts[0] + "." + parts.slice(1).join("");
+          }
+
+          if (value !== "") {
+            const num = Number(value);
+            if (num > 100) value = "100";
+            if (num < 0) value = "0";
+            value = value + "%";
+          }
+
+          setPreviewValues(prev => ({
+            ...prev,
+            [field.id]: value
+          }));
+        }}
+        className="w-full outline-none text-slate-700"
+      />
+    );
+  }
+
+  // 🔹 WHOLE NUMBER
+  if (field.inputType === "number") {
+    return (
+      <input
+        type="text"
+		disabled={isSystemField}
+        value={previewValues[field.id] || ""}
+        placeholder={field.placeholder || ""}
+        onChange={(e) => {
+          const value = e.target.value.replace(/[^0-9]/g, "");
+          setPreviewValues(prev => ({
+            ...prev,
+            [field.id]: value
+          }));
+        }}
+        className="w-full outline-none text-slate-700"
+      />
+    );
+  }
+
+  // 🔹 DECIMAL
+  if (field.inputType === "decimal") {
+    return (
+      <input
+        type="text"
+		disabled={isSystemField}
+        value={previewValues[field.id] || ""}
+        placeholder={field.placeholder || ""}
+        onChange={(e) => {
+          let value = e.target.value.replace(/[^0-9.]/g, "");
+
+          const parts = value.split(".");
+          if (parts.length > 2) {
+            value = parts[0] + "." + parts.slice(1).join("");
+          }
+
+          setPreviewValues(prev => ({
+            ...prev,
+            [field.id]: value
+          }));
+        }}
+        className="w-full outline-none text-slate-700"
+      />
+    );
+  }
+
+  // 🔹 DEFAULT TEXT
+  return (
+<input
+  type="text"
+  value={previewValues[field.id] || ""}
+  placeholder={field.placeholder || ""}
+  disabled={isSystemField}
+  onChange={(e) => {
+    if (isSystemField) return;
+
+    setPreviewValues(prev => ({
+      ...prev,
+      [field.id]: e.target.value
+    }));
   }}
+  className={`w-full outline-none text-slate-700 ${
+    isSystemField ? "bg-slate-100 cursor-not-allowed" : ""
+  }`}
 />
+  );
 
-    {/* FIELD OVERLAY */}
-    <div className="absolute inset-0 z-10">
-      {fields
-        .filter(f => f.page === currentPage)
-        .map(field => (
-         <Rnd
-  key={field.id}
-  bounds="parent"
-  size={{
-    width: pdfDimensions
-      ? field.widthPercent * pdfDimensions.width
-      : 100,
-    height: pdfDimensions
-      ? field.heightPercent * pdfDimensions.height
-      : 30
-  }}
-  position={{
-    x: pdfDimensions
-      ? field.xPercent * pdfDimensions.width
-      : 0,
-    y: pdfDimensions
-      ? field.yPercent * pdfDimensions.height
-      : 0
-  }}
-  onDragStop={(e, d) => {
-    if (!pdfDimensions) return;
+})()}
 
-    const newXPercent = d.x / pdfDimensions.width;
-    const newYPercent = d.y / pdfDimensions.height;
+      {/* DROPDOWN */}
+      {field.type === "select" && (
+        <select
+		disabled={isSystemField}
+          value={previewValues[field.id] || ""}
+          onChange={(e) =>
+            setPreviewValues(prev => ({
+              ...prev,
+              [field.id]: e.target.value
+            }))
+          }
+          className="w-full border border-slate-300 text-xs bg-white"
+        >
+          {(field.options?.length ? field.options : ["Option 1"]).map((opt, index) => (
+            <option key={index} value={opt}>
+              {opt}
+            </option>
+          ))}
+        </select>
+      )}
 
-    setFields(prev =>
-      prev.map(f =>
-        f.id === field.id
-          ? { ...f, xPercent: newXPercent, yPercent: newYPercent }
-          : f
-      )
-    );
-  }}
-  onResizeStop={(e, direction, ref, delta, position) => {
-    if (!pdfDimensions) return;
+{/* CHECKBOX (Preview Mode) */}
+{field.type === "checkbox" && (
+  <input
+  disabled={isSystemField}
+    type="checkbox"
+    checked={previewValues[field.id] || false}
+    onChange={(e) =>
+      setPreviewValues(prev => ({
+        ...prev,
+        [field.id]: e.target.checked
+      }))
+    }
+  />
+)}		
 
-    const newWidthPercent =
-      ref.offsetWidth / pdfDimensions.width;
+{/* LIST (Preview Mode) */}
+{field.type === "list" && (
+  <div
+    className={`${
+      field.listOrientation === "horizontal"
+        ? "flex flex-wrap gap-4"
+        : "flex flex-col gap-1"
+    } text-xs`}
+  >
+    {(field.options || []).map((opt, index) => {
+      const selectedValues: string[] = previewValues[field.id] || [];
 
-    const newHeightPercent =
-      ref.offsetHeight / pdfDimensions.height;
+      return (
+        <label key={index} className="flex items-center gap-1">
+          <input
+            type="checkbox"
+			disabled={isSystemField}
+            checked={selectedValues.includes(opt)}
+            onChange={(e) => {
+              setPreviewValues(prev => {
+                const current: string[] = prev[field.id] || [];
 
-    const newXPercent =
-      position.x / pdfDimensions.width;
-
-    const newYPercent =
-      position.y / pdfDimensions.height;
-
-    setFields(prev =>
-      prev.map(f =>
-        f.id === field.id
-          ? {
-              ...f,
-              widthPercent: newWidthPercent,
-              heightPercent: newHeightPercent,
-              xPercent: newXPercent,
-              yPercent: newYPercent
-            }
-          : f
-      )
-    );
-  }}
-  onClick={() => setSelectedField(field)}
-  className={`border-2 ${
-    selectedField?.id === field.id
-      ? "border-blue-500"
-      : "border-emerald-400"
-  } bg-white text-[10px] font-bold flex items-center justify-center cursor-move`}
->
-  {field.type.toUpperCase()}
-</Rnd>
-        ))}
-    </div>
-
+                if (e.target.checked) {
+                  return {
+                    ...prev,
+                    [field.id]: [...current, opt]
+                  };
+                } else {
+                  return {
+                    ...prev,
+                    [field.id]: current.filter(v => v !== opt)
+                  };
+                }
+              });
+            }}
+          />
+          <span>{opt}</span>
+        </label>
+      );
+    })}
   </div>
-</Document>
+)} 
+
+  {/* RADIO BUTTON (Preview Mode) */}
+{field.type === "radio_button" && (
+  <div
+    className={`${
+      field.listOrientation === "horizontal"
+        ? "flex flex-wrap gap-4"
+        : "flex flex-col gap-1"
+    } text-xs`}
+  >
+    {(field.options || []).map((opt, index) => (
+      <label key={index} className="flex items-center gap-1">
+        <input
+          type="radio"
+		  disabled={isSystemField}
+          name={field.id} // 🔥 IMPORTANT: ensures single selection
+          checked={previewValues[field.id] === opt}
+          onChange={() =>
+            setPreviewValues(prev => ({
+              ...prev,
+              [field.id]: opt
+            }))
+          }
+        />
+        <span>{opt}</span>
+      </label>
+    ))}
+  </div>
+)}
+
+{/* FORMULA (Preview Mode) */}
+{field.type === "formula" && (
+  <input
+    type="text"
+	disabled={isSystemField}
+    value={computeFormula(field)}
+    readOnly
+    className="w-full bg-slate-100 outline-none text-slate-700 text-xs font-bold"
+  />
+)}
+
+{/* IMAGE (Preview Mode) */}
+{field.type === "image" && (
+  <div className="relative w-full h-full border border-slate-300 bg-white overflow-hidden">
+
+    {previewValues[field.id] ? (
+      <>
+        <img
+          src={previewValues[field.id]}
+          alt="Uploaded"
+          className="w-full h-full object-contain"
+        />
+
+        <button
+          onClick={() => setImageToDelete(field.id)}
+          className="absolute top-1 right-1 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded"
+        >
+          ✕
+        </button>
+      </>
     ) : (
-      <div className="h-[700px] flex items-center justify-center text-slate-300 font-black text-lg">
-        Upload a PDF to start building
-      </div>
+      <label className="w-full h-full flex items-center justify-center cursor-pointer text-blue-600 text-xs font-bold">
+        Upload
+        <input
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = () => {
+              setPreviewValues(prev => ({
+                ...prev,
+                [field.id]: reader.result
+              }));
+            };
+            reader.readAsDataURL(file);
+          }}
+        />
+      </label>
     )}
+  </div>
+)}
+
+{/* SYSTEM USER (Preview Mode) */}
+{field.type === "system_user" && (
+  <div
+    style={{
+      fontSize: field.fontSize,
+      fontWeight: field.fontWeight,
+      fontFamily: field.fontFamily,
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent:
+        field.textAlign === "center"
+          ? "center"
+          : field.textAlign === "right"
+          ? "flex-end"
+          : "flex-start",
+      color: "#000"
+    }}
+  >
+   {user?.displayName || user?.fullName || user?.username || ""}
+  </div>
+)}
+{/* DATE / TIME (Preview Mode) */}
+{field.type === "date" && (() => {
+
+  const now = new Date();
+
+  // ✅ Convert UTC → Local (Philippines UTC+8)
+  const localISODateTime = new Date(
+    now.getTime() - now.getTimezoneOffset() * 60000
+  ).toISOString().slice(0, 16);
+
+  const localISODate = localISODateTime.split("T")[0];
+  const localISOTime = localISODateTime.split("T")[1];
+
+  const getType = () => {
+    if (field.dateMode === "time") return "time";
+    if (field.dateMode === "datetime") return "datetime-local";
+    return "date";
+  };
+
+  const getAutoValue = () => {
+    if (!field.autoNow) return previewValues[field.id] || "";
+
+    if (field.dateMode === "time") return localISOTime;
+    if (field.dateMode === "datetime") return localISODateTime;
+    return localISODate;
+  };
+  
+  
+return (
+  <input
+    type={getType()}
+    value={getAutoValue()}
+    min={field.minDate || undefined}
+    max={
+      field.isBirthdate
+        ? localISODate
+        : field.maxDate || undefined
+    }
+    disabled={isSystemField}
+    onChange={(e) => {
+      if (isSystemField) return;
+
+      setPreviewValues(prev => ({
+        ...prev,
+        [field.id]: e.target.value
+      }));
+    }}
+    className={`w-full outline-none text-slate-700 border border-slate-300 text-xs ${
+      isSystemField ? "bg-slate-100 cursor-not-allowed" : ""
+    }`}
+  />
+);
+})()}
+
+{/* LABEL */}
+{field.type === "label" && (
+  <span>{field.label}</span>
+)}
+    </div>
+  );
+}
+
+  // 🟢 BUILDER MODE (FIXED - FULL VERSION)
+return (
+  <Rnd
+    key={field.id}
+    bounds="parent"
+    size={{
+      width: pdfDimensions
+        ? field.widthPercent * pdfDimensions.width
+        : 100,
+      height: pdfDimensions
+        ? field.heightPercent * pdfDimensions.height
+        : 30
+    }}
+    position={{
+      x: pdfDimensions
+        ? field.xPercent * pdfDimensions.width
+        : 0,
+      y: pdfDimensions
+        ? field.yPercent * pdfDimensions.height
+        : 0
+    }}
+    onDragStop={(e, d) => {
+      if (!pdfDimensions) return;
+
+      const newXPercent = d.x / pdfDimensions.width;
+      const newYPercent = d.y / pdfDimensions.height;
+
+      setFields(prev =>
+        prev.map(f =>
+          f.id === field.id
+            ? { ...f, xPercent: newXPercent, yPercent: newYPercent }
+            : f
+        )
+      );
+    }}
+    onResizeStop={(e, direction, ref, delta, position) => {
+      if (!pdfDimensions) return;
+
+      const newWidthPercent =
+        ref.offsetWidth / pdfDimensions.width;
+
+      const newHeightPercent =
+        ref.offsetHeight / pdfDimensions.height;
+
+      const newXPercent =
+        position.x / pdfDimensions.width;
+
+      const newYPercent =
+        position.y / pdfDimensions.height;
+
+      setFields(prev =>
+        prev.map(f =>
+          f.id === field.id
+            ? {
+                ...f,
+                widthPercent: newWidthPercent,
+                heightPercent: newHeightPercent,
+                xPercent: newXPercent,
+                yPercent: newYPercent
+              }
+            : f
+        )
+      );
+    }}
+    onClick={() => {
+      if (!isPreviewMode) {
+        setSelectedField(field);
+      }
+    }}
+    className={`border-2 ${
+      selectedField?.id === field.id
+        ? "border-blue-500"
+        : "border-emerald-400"
+    } bg-white text-[10px] font-bold cursor-move`}
+  >
+    <div
+      style={{
+        fontSize: field.fontSize,
+        fontWeight: field.fontWeight,
+        textAlign: field.textAlign,
+        fontFamily: field.fontFamily,
+        width: "100%",
+        height: "100%",
+        display: "flex",
+        alignItems: "center",
+        justifyContent:
+          field.textAlign === "center"
+            ? "center"
+            : field.textAlign === "right"
+            ? "flex-end"
+            : "flex-start"
+      }}
+    >
+
+{/* INPUT TEXT (Builder Mode) */}
+{field.type === "input_text" && (
+  <input
+    type="text"
+    disabled
+    placeholder={field.placeholder || ""}
+    className="w-full bg-transparent outline-none text-slate-700 pointer-events-none"
+  />
+)}
+
+      {/* TEXTAREA */}
+      {field.type === "textarea" && (
+        <textarea
+          placeholder={field.placeholder || ""}
+          disabled
+          className="w-full h-full bg-transparent outline-none resize-none text-slate-700 pointer-events-none"
+        />
+      )}
+
+      {/* DROPDOWN */}
+      {field.type === "select" && (
+        <select
+          disabled
+          className="w-full bg-transparent text-slate-700 pointer-events-none"
+        >
+          {(field.options && field.options.length > 0
+            ? field.options
+            : ["Option 1"]
+          ).map((opt, index) => (
+            <option key={index}>{opt}</option>
+          ))}
+        </select>
+      )}
+
+      {/* CHECKBOX */}
+      {field.type === "checkbox" && (
+        <input type="checkbox" disabled />
+      )}
+{/* LIST (Builder Mode) */}
+{field.type === "list" && (
+  <div
+    className={`pointer-events-none text-xs ${
+      field.listOrientation === "horizontal"
+        ? "flex flex-wrap gap-4"
+        : "flex flex-col gap-1"
+    }`}
+  >
+    {(field.options && field.options.length > 0
+      ? field.options
+      : ["Option 1"]
+    ).map((opt, index) => (
+      <label key={index} className="flex items-center gap-1">
+        <input type="checkbox" disabled />
+        <span>{opt}</span>
+      </label>
+    ))}
+  </div>
+)}
+
+{/* DATE / TIME */}
+{field.type === "date" && (
+  <input
+    type="datetime-local"
+    disabled
+    className="w-full bg-transparent outline-none text-slate-700 pointer-events-none text-xs"
+  />
+)}
+
+{/* RADIO BUTTON (Builder Mode) */}
+{field.type === "radio_button" && (
+  <div
+    className={`pointer-events-none text-xs ${
+      field.listOrientation === "horizontal"
+        ? "flex flex-wrap gap-4"
+        : "flex flex-col gap-1"
+    }`}
+  >
+    {(field.options && field.options.length > 0
+      ? field.options
+      : ["Option 1"]
+    ).map((opt, index) => (
+      <label key={index} className="flex items-center gap-1">
+        <input type="radio" disabled />
+        <span>{opt}</span>
+      </label>
+    ))}
+  </div>
+)}
+
+{/* FORMULA (Builder Mode) */}
+{field.type === "formula" && (
+  <input
+    type="text"
+    disabled
+    placeholder="%Result"
+    className="w-full bg-slate-50 text-xs pointer-events-none"
+  />
+)}
+
+{/* IMAGE (Builder Mode) */}
+{field.type === "image" && (
+  <div className="w-full h-full bg-slate-100 border border-dashed border-slate-300 pointer-events-none" />
+)}
+
+{/* SYSTEM USER (Builder Mode) */}
+{field.type === "system_user" && (
+  <div className="w-full text-xs pointer-events-none">
+    Current User Name
+  </div>
+)}
+
+      {/* LABEL */}
+      {field.type === "label" && (
+        <span>{field.label}</span>
+      )}
+
+      {/* DEFAULT FALLBACK */}
+      {field.type !== "input_text" &&
+        field.type !== "textarea" &&
+        field.type !== "label" &&
+        field.type !== "select" &&
+        field.type !== "checkbox" &&
+        field.type !== "list" && 
+		field.type !== "date" &&
+		field.type !== "radio_button" &&
+		field.type !== "formula" &&
+		field.type !== "image" &&
+		field.type !== "system_user" &&(
+          <span>{field.label}</span>
+      )}
+
+    </div>
+  </Rnd>
+    );
+  })}
+</div>
+ </div>
+</Document>
 
   </div>
 </div>
+{/* RIGHT PROPERTIES */}
+<div className="w-72 bg-white border-l flex flex-col">
 
-       {/* RIGHT PROPERTIES */}
-<div className="w-72 bg-white border-l p-4">
-  <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
-    Field Properties
-  </div>
+  <div className="flex-1 overflow-y-auto p-4">
+
+    <div className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+      Field Properties
+    </div>
 
   {selectedField ? (
     <div className="space-y-4 mt-4">
 
+
+
       {/* LABEL */}
-      <div>
-        <label className="text-[10px] font-black uppercase text-slate-400">
-          Label
-        </label>
+    {selectedField.type !== "system_user" && (
+  <div>
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      Label
+    </label>
+    <input
+      type="text"
+      value={selectedField.label}
+      onChange={(e) =>
+        updateSelectedField({ label: e.target.value })
+      }
+      className={`w-full mt-1 border rounded-lg px-3 py-1.5 text-xs font-semibold ${
+  labelError
+    ? "border-red-500 focus:ring-2 focus:ring-red-400"
+    : "border-slate-300"
+}`}
+    />
+  </div>
+)}
+{labelError && (
+  <div className="text-[10px] text-red-600 font-bold mt-1">
+    {labelError}
+  </div>
+)}
+	   {/* SIZE*/}
+	  <div>
+  <label className="text-[10px] font-black uppercase text-slate-400">
+    Field Name
+  </label>
+<input
+  type="text"
+  value={selectedField.fieldName}
+  readOnly
+  className="w-full mt-1 bg-slate-100 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-semibold text-slate-500 cursor-not-allowed"
+/>
+</div>
+
+ {/* INPUT TYPE*/}
+{selectedField.type === "input_text" && (
+  <div>
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      Input Type
+    </label>
+
+    <select
+      value={selectedField.inputType || "text"}
+      onChange={(e) =>
+        updateSelectedField({ inputType: e.target.value })
+      }
+      className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+    >
+      <option value="text">Text</option>
+      <option value="number">Whole Number</option>
+      <option value="decimal">Decimal</option>
+      <option value="percentage">Percentage</option>
+    </select>
+  </div>
+)}
+
+ {/* RESULT TYPE*/}
+{selectedField.type === "formula" && (
+  <div>
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      Result Type
+    </label>
+
+    <select
+      value={selectedField.resultType || "number"}
+      onChange={(e) =>
+        updateSelectedField({ resultType: e.target.value })
+      }
+      className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+    >
+      <option value="number">Number</option>
+      <option value="decimal">Decimal</option>
+      <option value="percentage">Percentage</option>
+    </select>
+  </div>
+)}
+
+ {/* PLACEHOLDER*/}
+{selectedField.type !== "system_user" && (
+  <div>
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      Placeholder
+    </label>
+    <input
+      type="text"
+      value={selectedField.placeholder || ""}
+      onChange={(e) =>
+        updateSelectedField({ placeholder: e.target.value })
+      }
+      className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+    />
+  </div>
+)}
+
+{/* FORMULA SETTINGS */}
+{selectedField.type === "formula" && (
+  <div className="space-y-3">
+    <div>
+      <label className="text-[10px] font-black uppercase text-slate-400">
+        Formula Expression
+      </label>
+
+      <input
+        type="text"
+        value={selectedField.formulaExpression || ""}
+        onChange={(e) =>
+          updateSelectedField({
+            formulaExpression: e.target.value
+          })
+        }
+        placeholder="ex: height_123 + weight_456"
+        className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs"
+      />
+
+      <div className="text-[10px] text-slate-400 mt-1">
+        Use fieldName values (check Field Name above)
+      </div>
+    </div>
+  </div>
+)}
+
+{(
+  selectedField.type === "select" ||
+  selectedField.type === "list" ||
+  selectedField.type === "radio_button"
+) && (
+  <div>
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      Dropdown Options
+    </label>
+
+    {selectedField.options?.map((opt, index) => (
+      <div key={index} className="flex gap-2 mt-1">
         <input
           type="text"
-          value={selectedField.label}
-          onChange={(e) =>
-            updateSelectedField({ label: e.target.value })
-          }
-          className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+          value={opt}
+          onChange={(e) => {
+            const newOptions = [...(selectedField.options || [])];
+            newOptions[index] = e.target.value;
+            updateSelectedField({ options: newOptions });
+          }}
+          className="flex-1 border border-slate-300 rounded px-2 py-1 text-xs"
         />
+
+        <button
+          onClick={() => {
+            const newOptions = selectedField.options?.filter((_, i) => i !== index);
+            updateSelectedField({ options: newOptions });
+          }}
+          className="text-red-500 text-xs"
+        >
+          ✕
+        </button>
       </div>
+    ))}
+
+    <button
+      onClick={() =>
+        updateSelectedField({
+          options: [...(selectedField.options || []), "New Option"]
+        })
+      }
+      className="mt-2 text-xs text-blue-600 font-bold"
+    >
+      + Add Option
+    </button>
+	
+	{/* LIST ORIENTATION */}
+{(
+  selectedField.type === "list" ||
+  selectedField.type === "radio_button"
+) && (
+  <div className="mt-3">
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      List Orientation
+    </label>
+
+    <select
+      value={selectedField.listOrientation || "vertical"}
+      onChange={(e) =>
+        updateSelectedField({
+          listOrientation: e.target.value
+        })
+      }
+      className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+    >
+      <option value="vertical">Vertical</option>
+      <option value="horizontal">Horizontal</option>
+    </select>
+  </div>
+)}
+  </div>
+)}
+
+{/* DATE SETTINGS */}
+{selectedField.type === "date" && (
+  <div className="space-y-3">
+
+    <div>
+      <label className="text-[10px] font-black uppercase text-slate-400">
+        Date Type
+      </label>
+      <select
+        value={selectedField.dateMode || "date"}
+        onChange={(e) =>
+          updateSelectedField({ dateMode: e.target.value })
+        }
+        className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+      >
+        <option value="date">Date Only</option>
+        <option value="time">Time Only</option>
+        <option value="datetime">Date & Time</option>
+      </select>
+    </div>
+
+    <div className="flex items-center gap-2">
+      <input
+        type="checkbox"
+        checked={selectedField.autoNow || false}
+        onChange={(e) =>
+          updateSelectedField({ autoNow: e.target.checked })
+        }
+      />
+      <span className="text-xs font-bold text-slate-700">
+        Auto Current Timestamp
+      </span>
+    </div>
+
+    {selectedField.dateMode !== "time" && (
+      <>
+        <div>
+          <label className="text-[10px] font-black uppercase text-slate-400">
+            Min Date
+          </label>
+          <input
+            type="date"
+            value={selectedField.minDate || ""}
+            onChange={(e) =>
+              updateSelectedField({ minDate: e.target.value })
+            }
+            className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs"
+          />
+        </div>
+
+        <div>
+          <label className="text-[10px] font-black uppercase text-slate-400">
+            Max Date
+          </label>
+          <input
+            type="date"
+            value={selectedField.maxDate || ""}
+            onChange={(e) =>
+              updateSelectedField({ maxDate: e.target.value })
+            }
+            className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs"
+          />
+        </div>
+      </>
+    )}
+
+    <div className="flex items-center gap-2">
+      <input
+        type="checkbox"
+        checked={selectedField.isBirthdate || false}
+        onChange={(e) =>
+          updateSelectedField({ isBirthdate: e.target.checked })
+        }
+      />
+      <span className="text-xs font-bold text-slate-700">
+        Birthdate Mode (No Future Dates)
+      </span>
+    </div>
+
+  </div>
+)}
+{/* REQUIRED*/}
+<div className="flex items-center gap-2">
+  <input
+    type="checkbox"
+    checked={selectedField.required}
+    onChange={(e) =>
+      updateSelectedField({ required: e.target.checked })
+    }
+  />
+  <span
+    className={`text-xs font-bold ${
+      selectedField.required
+        ? "text-red-600"
+        : "text-slate-700"
+    }`}
+  >
+    Required Field?
+  </span>
+</div>
+
+
+<div className="pt-4">
+<button
+  onClick={() => setShowDeleteConfirm(true)}
+  className="w-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold py-2 rounded-lg"
+>
+  Delete Field
+</button>
+</div>
+{/* FONT STYLE SIZE POSITION*/}
+<div className="space-y-2">
+
+  <label className="text-[10px] font-black uppercase text-slate-400">
+    Font & Style
+  </label>
+
+  <div className="flex gap-2">
+
+    <input
+      type="number"
+      value={selectedField.fontSize}
+      onChange={(e) =>
+        updateSelectedField({ fontSize: Number(e.target.value) })
+      }
+      className="w-20 bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold outline-none focus:ring-2 focus:ring-slate-300"
+    />
+
+    <select
+      value={selectedField.fontWeight}
+      onChange={(e) =>
+        updateSelectedField({ fontWeight: e.target.value })
+      }
+      className="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold outline-none"
+    >
+      <option value="normal">Normal</option>
+      <option value="bold">Bold</option>
+    </select>
+
+    <select
+      value={selectedField.textAlign}
+      onChange={(e) =>
+        updateSelectedField({ textAlign: e.target.value })
+      }
+      className="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold outline-none"
+    >
+      <option value="left">Left</option>
+      <option value="center">Center</option>
+      <option value="right">Right</option>
+    </select>
+
+  </div>
+</div>
+
+<div className="space-y-1">
+  <label className="text-[10px] font-black uppercase text-slate-400">
+    Font Family
+  </label>
+
+  <select
+    value={selectedField.fontFamily || "Arial"}
+    onChange={(e) =>
+      updateSelectedField({ fontFamily: e.target.value })
+    }
+    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold outline-none"
+  >
+    <option value="Arial">Arial</option>
+    <option value="Segoe UI">Segoe UI</option>
+    <option value="Tahoma">Tahoma</option>
+    <option value="Verdana">Verdana</option>
+	<option value="Calibri">Calibri</option>
+  </select>
+</div>
 
       {/* DATA SOURCE */}
-      <div>
-        <label className="text-[10px] font-black uppercase text-slate-400">
-          Data Source
-        </label>
-        <select
-          value={selectedField.dataSource}
-          onChange={(e) =>
-            updateSelectedField({
-              dataSource: e.target.value,
-              systemBinding: null
-            })
-          }
-          className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
-        >
-          <option value="manual">Manual Input</option>
-          <option value="system">System Data</option>
-        </select>
-      </div>
+      {selectedField.type !== "system_user" && (
+  <div>
+    <label className="text-[10px] font-black uppercase text-slate-400">
+      Data Source
+    </label>
+    <select
+      value={selectedField.dataSource}
+      onChange={(e) =>
+        updateSelectedField({
+          dataSource: e.target.value,
+          systemBinding: null
+        })
+      }
+      className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-semibold"
+    >
+      <option value="manual">Manual Input</option>
+      <option value="system">System Data</option>
+    </select>
+  </div>
+)}
 
       {/* SYSTEM BINDING */}
-      {selectedField.dataSource === "system" && (
+      {selectedField.type !== "system_user" &&
+ selectedField.dataSource === "system" && (
         <div>
           <label className="text-[10px] font-black uppercase text-slate-400">
             Bind To
@@ -399,8 +1819,104 @@ const updateSelectedField = (updates: any) => {
     </div>
   )}
 </div>
+</div>
 
       </div>
+{showAuthModal && (
+  <AuthModal
+    currentUsername={user?.username || ""}
+    onClose={() => setShowAuthModal(false)}
+    onVerified={(user) => {
+      setShowAuthModal(false);
+      saveFields(user);
+    }}
+  />
+)}
+
+{showDeleteConfirm && selectedField && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[99999]">
+    <div className="bg-white rounded-xl shadow-2xl p-6 w-[320px]">
+      
+	  
+      <div className="text-sm font-bold text-slate-700">
+        Delete Field
+      </div>
+
+      <div className="text-xs text-slate-500 mt-2">
+        Are you sure you want to delete this field?
+        <br />
+        <span className="font-bold text-slate-700">
+          {selectedField.label}
+        </span>
+      </div>
+
+      <div className="flex justify-end gap-2 mt-6">
+        <button
+          onClick={() => setShowDeleteConfirm(false)}
+          className="px-4 py-1.5 text-xs font-bold bg-slate-200 rounded-lg"
+        >
+          Cancel
+        </button>
+
+        <button
+      onClick={() => {
+  setFields(prev =>
+    prev.filter(f => f.id !== selectedField.id)
+  );
+  setSelectedField(null);
+  setLabelError(null);
+  setShowDeleteConfirm(false);
+}}
+          className="px-4 py-1.5 text-xs font-bold bg-red-600 text-white rounded-lg"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+{imageToDelete && (
+  <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[99999]">
+    <div className="bg-white rounded-xl shadow-2xl p-6 w-[320px]">
+
+      <div className="text-sm font-bold text-slate-700">
+        Remove Image
+      </div>
+
+      <div className="text-xs text-slate-500 mt-2">
+        Are you sure you want to remove this image?
+      </div>
+
+      <div className="flex justify-end gap-2 mt-6">
+        <button
+          onClick={() => setImageToDelete(null)}
+          className="px-4 py-1.5 text-xs font-bold bg-slate-200 rounded-lg"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={() => {
+            setPreviewValues(prev => ({
+              ...prev,
+              [imageToDelete]: null
+            }));
+            setImageToDelete(null);
+          }}
+          className="px-4 py-1.5 text-xs font-bold bg-red-600 text-white rounded-lg"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+<TransactionOverlay
+  key={txKey}
+  status={txStatus}
+  message={txMsg}
+  onClose={() => setTxStatus("idle")}
+/>
     </div>
   );
 };

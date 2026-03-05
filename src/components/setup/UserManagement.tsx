@@ -432,6 +432,7 @@ const performSave = async (verifiedUsername: string) => {
     formDataToSend.append("usr_first_name", formData.firstName);
     formDataToSend.append("usr_middle_name", formData.middleName);
     formDataToSend.append("usr_extension", formData.extension);
+	formDataToSend.append("usr_custom_name", formData.customName);
     formDataToSend.append("usr_username", formData.username);
     formDataToSend.append("usr_email", formData.email);
     formDataToSend.append("usr_password", formData.password);

@@ -88,6 +88,7 @@ console.log("CURRENT USER:", currentUser);
     usr_photo_path,
     usr_signature_path,
     usr_associate_doctor_name,
+	usr_custom_name,
     departments = [],
     defaultDepartment
   } = data;
@@ -133,6 +134,13 @@ if (currentUser?.id) {
       .input("usr_last_name", toUpper(usr_last_name))
       .input("usr_first_name", toUpper(usr_first_name))
       .input("usr_middle_name", toUpper(usr_middle_name))
+	 .input(
+  "usr_custom_name",
+  sql.NVarChar(150),
+  typeof usr_custom_name === "string" && usr_custom_name.trim() !== ""
+    ? usr_custom_name.trim().toUpperCase()
+    : null
+)
       .input("usr_extension", toUpper(usr_extension))
       .input("usr_username", usr_username)
       .input("usr_email", usr_email)
@@ -150,6 +158,7 @@ if (currentUser?.id) {
           usr_last_name,
           usr_first_name,
           usr_middle_name,
+		  usr_custom_name,
           usr_extension,
           usr_username,
           usr_email,
@@ -167,6 +176,7 @@ usr_date_created
           @usr_last_name,
           @usr_first_name,
           @usr_middle_name,
+		  @usr_custom_name,
           @usr_extension,
           @usr_username,
           @usr_email,
@@ -227,6 +237,7 @@ const updateUser = async (pool, id, data) => {
     usr_first_name,
     usr_middle_name,
     usr_extension,
+	usr_custom_name,
     usr_email,
     fk_usr_group_code,
     fk_usr_type_code,
@@ -263,6 +274,13 @@ const updateUser = async (pool, id, data) => {
       .input("usr_last_name", toUpper(usr_last_name))
       .input("usr_first_name", toUpper(usr_first_name))
       .input("usr_middle_name", toUpper(usr_middle_name))
+	 .input(
+  "usr_custom_name",
+  sql.NVarChar(150),
+  typeof usr_custom_name === "string" && usr_custom_name.trim() !== ""
+    ? usr_custom_name.trim().toUpperCase()
+    : null
+)
       .input("usr_extension", toUpper(usr_extension))
       .input("usr_email", usr_email)
       .input("fk_usr_group_code", fk_usr_group_code)
@@ -288,6 +306,7 @@ const updateUser = async (pool, id, data) => {
         usr_first_name = @usr_first_name,
         usr_middle_name = @usr_middle_name,
         usr_extension = @usr_extension,
+		usr_custom_name = @usr_custom_name, 
         usr_email = @usr_email,
         fk_usr_group_code = @fk_usr_group_code,
         fk_usr_type_code = @fk_usr_type_code,

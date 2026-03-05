@@ -27,7 +27,12 @@ interface LayoutProps {
 
 export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onSwitchDepartment, currentView, onNavigate }) => {
 
-const { facility } = useFacility();
+  console.log("===== LAYOUT USER DEBUG =====");
+  console.log("FULL USER:", user);
+  console.log("USER.GROUP:", user?.group);
+  console.log("USER.ROLE:", user?.role);
+
+const { facility, activeDepartment } = useFacility();
 console.log("Facility Context:", facility); // 👈 ADD IT HERE
   const [isCollapsed, setIsCollapsed] = useState(false);
 const hasPhoto =
@@ -80,7 +85,7 @@ const imageUrl = hasPhoto
                     Active Station
                   </p>
                   <p className="text-[12px] text-white font-black uppercase tracking-tight">
-                    {user.department?.description}
+                    {activeDepartment?.description}
                   </p>
                 </div>
                 <button 
@@ -98,7 +103,7 @@ const imageUrl = hasPhoto
           <nav className="space-y-1.5 flex-1 mt-4">
             <NavItem 
               icon={<LayoutDashboard size={18} />} 
-              label="Dashboard" 
+              label="Home" 
               isActive={currentView === 'dashboard'} 
               isCollapsed={isCollapsed}
               onClick={() => onNavigate('dashboard')} 
@@ -110,23 +115,25 @@ const imageUrl = hasPhoto
               isCollapsed={isCollapsed}
               onClick={() => onNavigate('view')} 
             />
-            <NavItem 
-              icon={<ShieldCheck size={18} />} 
-              label="Audit Trail" 
-              isActive={currentView === 'audit'} 
-              isCollapsed={isCollapsed}
-              onClick={() => onNavigate('audit')} 
-            />
+      {user.role?.toUpperCase() === "ADMIN" && (
+  <NavItem 
+    icon={<ShieldCheck size={18} />} 
+    label="Audit Trail" 
+    isActive={currentView === 'audit'} 
+    isCollapsed={isCollapsed}
+    onClick={() => onNavigate('audit')} 
+  />
+)}
 
-            {user.role === UserRole.ADMIN && (
-              <NavItem 
-                icon={<Settings size={18} />} 
-                label="Setup" 
-                isActive={currentView === 'setup'} 
-                isCollapsed={isCollapsed}
-                onClick={() => onNavigate('setup')} 
-              />
-            )}
+       {user.role?.toUpperCase() === "ADMIN" && (
+  <NavItem 
+    icon={<Settings size={18} />} 
+    label="Setup" 
+    isActive={currentView === 'setup'} 
+    isCollapsed={isCollapsed}
+    onClick={() => onNavigate('setup')} 
+  />
+)}
           </nav>
 
           {/* User Profile & Footer */}
@@ -212,6 +219,7 @@ const imageUrl = hasPhoto
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           {children}
         </div>
+
       </main>
     </div>
   );

@@ -39,6 +39,7 @@ if (!isMatch) {
     .input("username", sql.VarChar(100), username.trim())
     .query(`
       SELECT TOP 1
+	  d.auto_id,
         d.dept_code,
         d.dept_name
       FROM dbo.user_department_access uda
@@ -50,6 +51,7 @@ if (!isMatch) {
 
 const defaultDepartment = deptResult.recordset.length
   ? {
+      id: deptResult.recordset[0].auto_id,   // 🔥 ADD THIS
       code: deptResult.recordset[0].dept_code,
       description: deptResult.recordset[0].dept_name
     }
@@ -62,20 +64,24 @@ const token = jwt.sign(
   {
     id: dbUser.auto_id,
     username: dbUser.usr_username,
-    role: dbUser.fk_usr_group_code
+    group: dbUser.fk_usr_group_code,
+    role: dbUser.fk_usr_type_code
   },
   process.env.JWT_SECRET,
   { expiresIn: "8h" }
 );
 
-// ✅ Return token + user data
 return {
   token,
   user: {
     id: dbUser.auto_id,
     username: dbUser.usr_username,
     fullName: `${dbUser.usr_last_name}, ${dbUser.usr_first_name}`,
-    role: String(dbUser.fk_usr_group_code).toUpperCase(),
+    displayName: dbUser.usr_custom_name || null,
+
+    group: String(dbUser.fk_usr_group_code).toUpperCase(), // system permission
+    role: String(dbUser.fk_usr_type_code).toUpperCase(),   // clinical role
+
     status: dbUser.usr_status_active,
     defaultDepartment,
     photo: dbUser.usr_photo_path || null

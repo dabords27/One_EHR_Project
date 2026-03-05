@@ -23,18 +23,26 @@ export const CourseInWardModule: React.FC<CourseInWardModuleProps> = ({
   forceMinimized
 }) => {
 
-  const [isMinimized, setIsMinimized] = useState(true);
+const [isMinimized, setIsMinimized] = useState(true);
   const [isMaximized, setIsMaximized] = useState(false);
+  
+  useEffect(() => {
+  console.log("CourseInWard MOUNTED");
+
+  return () => {
+    console.log("CourseInWard UNMOUNTED");
+  };
+}, []);
 
   const [admissionDateTime, setAdmissionDateTime] = useState<string | null>(null);
   const [courses, setCourses] = useState<any[]>([]);
 
   // Respect App.tsx control
-  useEffect(() => {
-    if (forceMinimized) {
-      setIsMinimized(true);
-    }
-  }, [forceMinimized]);
+ useEffect(() => {
+  if (forceMinimized !== undefined) {
+    setIsMinimized(forceMinimized);
+  }
+}, [forceMinimized]);
 
   // Reset maximize when patient changes
   useEffect(() => {
@@ -90,10 +98,12 @@ export const CourseInWardModule: React.FC<CourseInWardModuleProps> = ({
   /* ================= MINIMIZED ================= */
 
   if (isMinimized) {
+  
+  
     return (
       <div
         style={{ right: '20px', bottom: '110px' }}
-        className="fixed z-[999] w-80 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-between px-4 py-3 cursor-pointer border border-white/10"
+        className="fixed z-[10000] w-80 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-between px-4 py-3 cursor-pointer border border-white/10"
         onClick={() => setIsMinimized(false)}
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -157,7 +167,7 @@ export const CourseInWardModule: React.FC<CourseInWardModuleProps> = ({
   return (
     <div
       style={moduleStyle}
-      className="fixed z-[1000] bg-white rounded-[40px] shadow-2xl flex flex-col border border-slate-200 overflow-hidden transition-[transform,width,height] duration-300 ease-out"
+      className="fixed z-[10000] bg-white rounded-[40px] shadow-2xl flex flex-col border border-slate-200 overflow-hidden transition-[transform,width,height] duration-300 ease-out"
     >
       {/* HEADER */}
       <div className="bg-slate-800 p-5 flex items-center justify-between">

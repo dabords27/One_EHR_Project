@@ -15,10 +15,20 @@ const result = await request.query(`
     SELECT 
         RegistryTrackingNo AS RegistryNo,
         MRN,
+        Lastname,
+        Firstname,
+        Middlename,
         Lastname + ', ' + Firstname + ' ' + ISNULL(Middlename,'') AS PatientName,
+
         Birthdate,
         Gender AS Sex,
         PatientType,
+
+        -- ✅ NEW COLUMNS
+        Age,
+        Extension,
+        Age2,
+
         ISNULL(RoomBedNo, '') AS RoomBedNo,
         AdmissionDateTime,
         DischargeDateTime,
