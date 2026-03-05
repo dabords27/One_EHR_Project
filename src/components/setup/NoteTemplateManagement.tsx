@@ -9,10 +9,7 @@ interface NoteTemplateManagementProps {
   onBack: () => void;
 }
 
-const API_BASE =
-  import.meta.env.VITE_API_URL || 'http://172.25.22.45:5000';
-
-const API_URL = `${API_BASE}/api/notetemplates`;
+const API_URL = `${import.meta.env.VITE_API_URL}/api/notetemplates`;
 
 export const NoteTemplateManagement: React.FC<NoteTemplateManagementProps> = ({ onBack }) => {
 

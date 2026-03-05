@@ -79,7 +79,7 @@ export const SYSTEM_FIELD_REGISTRY: SystemFieldGroup[] = [
       { key: "visit.patient_type", label: "Patient Type", column: "patient_type" },
       { key: "visit.service_type", label: "Service Type", column: "service_type" },
       { key: "visit.transaction_type", label: "Transaction Type", column: "transaction_type" },
-      { key: "visit.room_bed", label: "Room / Bed No", column: "room_no" }
+      { key: "visit.room_bed", label: "Room / Bed No", column: "room_bed_no" }
     ]
   },
 

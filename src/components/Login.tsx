@@ -88,9 +88,9 @@ const [showPassword, setShowPassword] = useState(false);
       />
 
       <div className="max-w-md w-full animate-in zoom-in-95 duration-700 relative z-10">
-        <div className="bg-[#0f172a]/95 backdrop-blur-3xl rounded-[48px] shadow-[0_32px_120px_-20px_rgba(0,163,255,0.15)] overflow-hidden border border-white/5 flex flex-col min-h-[720px]">
+        <div className="bg-[#0f172a]/95 backdrop-blur-3xl rounded-[48px] shadow-[0_32px_120px_-20px_rgba(0,163,255,0.15)] overflow-hidden border border-white/5 flex flex-col min-h-[620px]">
           {/* Brand Header */}
-          <div className="pt-16 pb-10 text-center relative flex flex-col items-center border-b border-white/5 bg-white/[0.01]">
+         <div className="pt-7 pb-8 text-center relative flex flex-col items-center border-b border-white/5 bg-white/[0.01]">
             <div className="w-24 h-24 bg-white rounded-[32px] shadow-2xl flex items-center justify-center mb-10 relative z-10 border border-white/10 p-0.5 transition-transform hover:scale-105 active:scale-95 duration-500 cursor-pointer shadow-sky-500/10">
               <div className="w-full h-full rounded-[28px] bg-slate-900 flex items-center justify-center relative overflow-hidden group">
                 <div className="absolute inset-0 bg-sky-500/10 opacity-0 group-hover:opacity-100 transition-opacity" />
