@@ -64,7 +64,7 @@ const [confirmAction, setConfirmAction] = useState<{
   
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
 
-  const [isMinimized, setIsMinimized] = useState(true);
+const [viewState, setViewState] = useState<"open" | "minimized" | "collapsed">("minimized");
   const [isMaximized, setIsMaximized] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 const [templates, setTemplates] = useState<NoteTemplate[]>([]);
@@ -630,13 +630,23 @@ return `
       };
 
   /* ================= MINIMIZED ================= */
-
-  if (isMinimized) {
+if (viewState === "collapsed") {
+  return (
+    <div
+      style={{ right: "20px", bottom: "20px" }}
+      className="fixed z-[11000] w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center shadow-xl cursor-pointer"
+      onClick={() => setViewState("minimized")}
+    >
+      <MessageSquare size={20} className="text-white" />
+    </div>
+  );
+}
+if (viewState === "minimized") {
     return (
       <div
         style={{ right: "20px", bottom: "20px" }}
         className="fixed z-[11000] w-80 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-between px-4 py-3 cursor-pointer"
-        onClick={() => setIsMinimized(false)}
+       onClick={() => setViewState("open")}
       >
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
@@ -654,10 +664,10 @@ return `
             </div>
           </div>
         </div>
-        <button
+<button
   onClick={(e) => {
-    e.stopPropagation();   // ✅ prevent bubbling
-    onClose();
+    e.stopPropagation();
+    setViewState("collapsed");
   }}
 >
   <X size={14} />
@@ -703,12 +713,13 @@ return `
             <button onClick={() => setIsMaximized(!isMaximized)}>
               {isMaximized ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
             </button>
-            <button onClick={() => setIsMinimized(true)}>
-              <Minus size={18} />
-            </button>
-            <button onClick={onClose}>
-              <X size={18} />
-            </button>
+      <button onClick={() => setViewState("minimized")}>
+  <Minus size={18} />
+</button>
+
+<button onClick={() => setViewState("collapsed")}>
+  <X size={18} />
+</button>
           </div>
         </div>
 

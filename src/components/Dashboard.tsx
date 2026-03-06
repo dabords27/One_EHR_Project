@@ -14,14 +14,16 @@ interface DashboardProps {
   onNavigate: (view: 'dashboard' | 'create' | 'view' | 'setup', id: number | null, patient: Patient | null) => void;
   department: Department;
   setActivePatient: (patient: Patient | null) => void;
+  user: any;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, setActivePatient }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, setActivePatient, user }) => {
 
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formsTodayCount, setFormsTodayCount] = useState(0);
+
 
   const [statusFilter, setStatusFilter] = useState('Active');
   const [typeFilter, setTypeFilter] = useState('Inpatient');
@@ -36,21 +38,70 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
     new Date().toISOString().split('T')[0]
   );
 
-  /* ================= FORMS TODAY ================= */
+const [sortConfig, setSortConfig] = useState<{
+  key: string | null;
+  direction: "asc" | "desc";
+}>({
+key: "date_admitted",
+direction: "desc"
+});
 
-  useEffect(() => {
-    const storedRecords: OperativeRecord[] =
-      JSON.parse(localStorage.getItem('operative_records') || '[]');
+/* ================= FORMS TODAY ================= */
 
-    const todayStr = new Date().toISOString().split('T')[0];
+useEffect(() => {
 
-    const count = storedRecords.filter(record =>
-      record.record_datetime?.startsWith(todayStr)
-    ).length;
+if (!user) return;
 
-    setFormsTodayCount(count);
-  }, []);
+  const fetchFormsToday = async () => {
 
+    try {
+
+      const token = localStorage.getItem("token");
+
+      const res = await fetch(`/api/custom-forms/repository`, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) return;
+
+const data = await res.json();
+console.log("USER:", user?.usr_custom_name);
+console.log("DATA:", data);
+
+const today = new Date().toLocaleDateString("en-CA", {
+  timeZone: "Asia/Manila"
+});
+
+const count = data.filter((r: any) => {
+
+  if (!r.created_at) return false;
+
+  const recordDate = new Date(r.created_at).toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila"
+  });
+
+  return (
+    Number(r.created_by) === Number(user.id) &&
+    recordDate === today
+  );
+
+}).length;
+
+setFormsTodayCount(count);
+
+    } catch (err) {
+
+      console.error("Forms today error:", err);
+
+    }
+
+  };
+
+  fetchFormsToday();
+
+}, [user]);
   /* ================= FETCH ADMISSIONS ================= */
 
   const fetchAdmissions = async () => {
@@ -118,12 +169,15 @@ const mapped = data.map((item: any) => ({
     fetchActiveCount();
     const interval = setInterval(fetchActiveCount, 30000);
     return () => clearInterval(interval);
-  }, []);
+}, [user]);
 
   /* ================= DATE FORMAT ================= */
 
   const formatDateWithTime = (dateStr: string) => {
+
     if (!dateStr) return '';
+
+
 
     const clean = dateStr.replace('Z', '');
     const date = new Date(clean);
@@ -138,6 +192,40 @@ const mapped = data.map((item: any) => ({
       hour12: true
     });
   };
+
+
+const requestSort = (key: string) => {
+  let direction: "asc" | "desc" = "asc";
+
+  if (sortConfig.key === key && sortConfig.direction === "asc") {
+    direction = "desc";
+  }
+
+  setSortConfig({ key, direction });
+};
+
+const sortedPatients = React.useMemo(() => {
+  let sortable = [...patients];
+
+  if (sortConfig.key) {
+    sortable.sort((a: any, b: any) => {
+      let aValue = a[sortConfig.key!];
+      let bValue = b[sortConfig.key!];
+
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+
+      return 0;
+    });
+  }
+
+  return sortable;
+}, [patients, sortConfig]);
 
   /* ================= UI ================= */
 
@@ -160,13 +248,33 @@ const mapped = data.map((item: any) => ({
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5">
+       <div
+ onClick={() => {
+
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila"
+  });
+
+  sessionStorage.setItem(
+    "dashboard_filter",
+    JSON.stringify({
+      created_by: user?.id,
+      fromDate: today,
+      toDate: today
+    })
+  );
+
+  onNavigate("view", null, null);
+
+}}
+  className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5 cursor-pointer hover:bg-slate-50 transition"
+>
           <div className="bg-emerald-50 p-4 rounded-xl text-emerald-600">
             <ClipboardCheck size={28} />
           </div>
           <div>
             <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-              Forms Today
+              My Forms Today
             </p>
             <p className="text-3xl font-black text-slate-800">
               {formsTodayCount}
@@ -271,15 +379,30 @@ const mapped = data.map((item: any) => ({
           <table className="w-full text-left border-collapse table-auto">
 <thead>
   <tr className="bg-slate-50 border-b border-slate-200">
-    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-      Case ID
-    </th>
-    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-      MRN
-    </th>
-    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-      Patient Name
-    </th>
+<th
+  onClick={() => requestSort("case_id")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Case ID {sortConfig.key === "case_id" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("mrn")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  MRN {sortConfig.key === "mrn" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("last_name")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Patient Name {sortConfig.key === "last_name" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
     <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
       Birthdate
     </th>
@@ -292,9 +415,14 @@ const mapped = data.map((item: any) => ({
     <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
       Rm/Bed
     </th>
-    <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-      Date Admitted
-    </th>
+<th
+  onClick={() => requestSort("date_admitted")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Date Admitted {sortConfig.key === "date_admitted" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
     <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
       Status
     </th>
@@ -302,7 +430,7 @@ const mapped = data.map((item: any) => ({
 </thead>
 
             <tbody className="divide-y divide-slate-100">
-              {patients.map((patient) => (
+              {sortedPatients.map((patient) => (
                 <tr
   key={patient.case_id}
   onDoubleClick={() => {

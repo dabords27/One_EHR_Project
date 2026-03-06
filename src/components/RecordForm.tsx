@@ -45,7 +45,8 @@ export const RecordForm: React.FC<RecordFormProps> = ({
   const [availableTemplates, setAvailableTemplates] = useState<FormTemplate[]>([]);
   const [formData, setFormData] = useState<any>({});
   const [loadedPatient, setLoadedPatient] = useState<Patient | null>(null);
-
+const [templateSearch, setTemplateSearch] = useState("");
+const [templateSort, setTemplateSort] = useState<"name" | "date">("name");
   const patient = selectedPatient || loadedPatient;
 
   const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
@@ -61,6 +62,33 @@ export const RecordForm: React.FC<RecordFormProps> = ({
         .toUpperCase()
     : "";
 
+
+
+
+
+  /* =========================
+     SEARCH
+  ========================= */
+const filteredTemplates = availableTemplates
+  .filter((t) =>
+    t.name?.toLowerCase().includes(templateSearch.toLowerCase())
+  )
+  .sort((a, b) => {
+
+    if (templateSort === "name") {
+      return a.name.localeCompare(b.name);
+    }
+
+    if (templateSort === "date") {
+      return (
+        new Date(b.created_at || 0).getTime() -
+        new Date(a.created_at || 0).getTime()
+      );
+    }
+
+    return 0;
+
+  });
   /* =========================
      LOAD CUSTOM TEMPLATES
   ========================= */
@@ -269,20 +297,42 @@ export const RecordForm: React.FC<RecordFormProps> = ({
 
         <div className="bg-white border-2 border-slate-900 shadow-2xl p-8 min-h-[900px]">
 
-          {/* TEMPLATE SELECTOR */}
+{/* TEMPLATE SELECTOR */}
 
-          {!editId && !activeTemplate && availableTemplates.length > 0 && (
-            <>
-              <h2 className="text-sm font-black uppercase tracking-widest mb-6">
-                Available Templates
-              </h2>
+{!editId && !activeTemplate && availableTemplates.length > 0 && (
+  <>
+    <h2 className="text-sm font-black uppercase tracking-widest mb-6">
+      Available Templates
+    </h2>
 
-              <TemplateSelector
-                templates={availableTemplates}
-                onSelect={setActiveTemplate}
-              />
-            </>
-          )}
+    {/* SEARCH + SORT */}
+    <div className="flex gap-3 mb-6">
+
+      <input
+        type="text"
+        placeholder="Search template..."
+        value={templateSearch}
+        onChange={(e) => setTemplateSearch(e.target.value)}
+        className="border px-3 py-2 text-sm w-64"
+      />
+
+      <select
+        value={templateSort}
+        onChange={(e) => setTemplateSort(e.target.value as any)}
+        className="border px-3 py-2 text-sm"
+      >
+        <option value="name">Sort by Name</option>
+        <option value="date">Sort by Date Created</option>
+      </select>
+
+    </div>
+
+    <TemplateSelector
+      templates={filteredTemplates}
+      onSelect={setActiveTemplate}
+    />
+  </>
+)}
 
           {/* STATIC FORM */}
 

@@ -1,18 +1,16 @@
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import React, { useState, useEffect } from 'react';
 import { useFacility } from "../context/FacilityContext";
 import { 
   LayoutDashboard, 
-  FilePlus, 
   Table, 
-  LogOut, 
-  User as UserIcon,
+  LogOut,
   ArrowLeft,
   Settings,
   Activity,
   ChevronLeft,
   ChevronRight,
-  ShieldCheck,
-  Menu
+  ShieldCheck
 } from 'lucide-react';
 import { User, UserRole } from '../types';
 
@@ -32,15 +30,13 @@ export const Layout: React.FC<LayoutProps> = ({ children, user, onLogout, onSwit
 const { facility, activeDepartment } = useFacility();
 
   const [isCollapsed, setIsCollapsed] = useState(false);
+const [showChangePassword, setShowChangePassword] = useState(false);
 const hasPhoto =
   user.profileImage &&
   user.profileImage !== "" &&
   user.profileImage !== "null";
 
-const imageUrl = hasPhoto
-  ? `${import.meta.env.VITE_API_URL}${user.profileImage}`
-  : "/placeholder-user.png";
- 
+
 
   return (
     <div className="flex min-h-screen bg-[#f1f5f9]">
@@ -112,7 +108,7 @@ const imageUrl = hasPhoto
               isCollapsed={isCollapsed}
               onClick={() => onNavigate('view')} 
             />
-      {user.role?.toUpperCase() === "ADMIN" && (
+      {user.group?.toUpperCase() === "ADMIN" && (
   <NavItem 
     icon={<ShieldCheck size={18} />} 
     label="Audit Trail" 
@@ -122,7 +118,7 @@ const imageUrl = hasPhoto
   />
 )}
 
-       {user.role?.toUpperCase() === "ADMIN" && (
+       {user.group?.toUpperCase() === "ADMIN" && (
   <NavItem 
     icon={<Settings size={18} />} 
     label="Setup" 
@@ -134,7 +130,7 @@ const imageUrl = hasPhoto
           </nav>
 
           {/* User Profile & Footer */}
-          <div className="pt-6 border-t border-white/5">
+          <div className="pt-6 border-t border-white/10">
             <div className={`flex items-center gap-3 mb-6 transition-all duration-300 ${isCollapsed ? 'justify-center' : 'px-1'}`}>
           <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-slate-900 flex-shrink-0">
 {hasPhoto ? (
@@ -153,6 +149,12 @@ const imageUrl = hasPhoto
                 <div className="overflow-hidden animate-in fade-in slide-in-from-left-2 duration-300">
                   <p className="text-xs font-black text-white truncate uppercase tracking-tight">{user.fullName}</p>
                   <p className="text-[12px] text-sky-400 uppercase tracking-[0.2em] font-black">{user.role}</p>
+<button
+  onClick={() => setShowChangePassword(true)}
+  className="text-[9px] text-sky-400/70 hover:text-white uppercase tracking-widest font-black mt-1 transition underline underline-offset-2"
+>
+  Change Password
+</button>
                 </div>
               )}
             </div>
@@ -218,6 +220,22 @@ const imageUrl = hasPhoto
         </div>
 
       </main>
+{showChangePassword && (
+<ChangePasswordModal
+  username={user.username}
+  onClose={() => setShowChangePassword(false)}
+onSuccess={() => {
+  setShowChangePassword(false);
+
+  // destroy session
+  localStorage.clear();
+  sessionStorage.clear();
+
+  // reload app -> authentication will fail -> login page
+  window.location.reload();
+}}
+/>
+)}
     </div>
   );
 };

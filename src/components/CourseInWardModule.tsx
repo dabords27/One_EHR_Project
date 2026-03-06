@@ -23,26 +23,23 @@ export const CourseInWardModule: React.FC<CourseInWardModuleProps> = ({
   forceMinimized
 }) => {
 
-const [isMinimized, setIsMinimized] = useState(true);
+  // UPDATED STATE (open | minimized | collapsed)
+  const [viewState, setViewState] = useState<"open" | "minimized" | "collapsed">("open");
   const [isMaximized, setIsMaximized] = useState(false);
-  
+
   useEffect(() => {
-
-
-  return () => {
-
-  };
-}, []);
+    return () => {};
+  }, []);
 
   const [admissionDateTime, setAdmissionDateTime] = useState<string | null>(null);
   const [courses, setCourses] = useState<any[]>([]);
 
   // Respect App.tsx control
- useEffect(() => {
-  if (forceMinimized !== undefined) {
-    setIsMinimized(forceMinimized);
-  }
-}, [forceMinimized]);
+  useEffect(() => {
+    if (forceMinimized !== undefined) {
+      setViewState(forceMinimized ? "minimized" : "open");
+    }
+  }, [forceMinimized]);
 
   // Reset maximize when patient changes
   useEffect(() => {
@@ -95,16 +92,31 @@ const [isMinimized, setIsMinimized] = useState(true);
     .trim()
     .toUpperCase();
 
+
+  /* ================= COLLAPSED ICON ================= */
+
+  if (viewState === "collapsed") {
+    return (
+      <div
+        style={{ right: '20px', bottom: '110px' }}
+        className="fixed z-[10000] w-12 h-12 rounded-xl bg-emerald-600 flex items-center justify-center shadow-xl cursor-pointer"
+        onClick={() => setViewState("minimized")}
+      >
+        <Stethoscope size={20} className="text-white" />
+      </div>
+    );
+  }
+
+
   /* ================= MINIMIZED ================= */
 
-  if (isMinimized) {
-  
-  
+  if (viewState === "minimized") {
+
     return (
       <div
         style={{ right: '20px', bottom: '110px' }}
         className="fixed z-[10000] w-80 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-between px-4 py-3 cursor-pointer border border-white/10"
-        onClick={() => setIsMinimized(false)}
+        onClick={() => setViewState("open")}
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center">
@@ -132,15 +144,17 @@ const [isMinimized, setIsMinimized] = useState(true);
         <button
           onClick={(e) => {
             e.stopPropagation();
-            onClose();
+            setViewState("collapsed");
           }}
           className="p-1 hover:bg-white/10 rounded-md"
         >
           <X size={14} />
         </button>
+
       </div>
     );
   }
+
 
   /* ================= POSITION ================= */
 
@@ -161,6 +175,7 @@ const [isMinimized, setIsMinimized] = useState(true);
         height: "640px",
         transform: "scale(1)"
       };
+
 
   /* ================= RENDER ================= */
 
@@ -209,18 +224,19 @@ const [isMinimized, setIsMinimized] = useState(true);
           </button>
 
           <button
-            onClick={() => setIsMinimized(true)}
+            onClick={() => setViewState("minimized")}
             className="p-2.5 text-slate-400 hover:text-white rounded-xl"
           >
             <Minus size={20} />
           </button>
 
           <button
-            onClick={onClose}
+            onClick={() => setViewState("collapsed")}
             className="p-2.5 text-slate-400 hover:text-rose-400 rounded-xl"
           >
             <X size={20} />
           </button>
+
         </div>
       </div>
 

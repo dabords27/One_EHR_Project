@@ -231,13 +231,14 @@ if (view === 'select-form' || view === 'create') {
         onNavigate={navigateTo}
       >
 
-        {currentView === 'dashboard' && (
-          <Dashboard
-            onNavigate={navigateTo}
-            department={department}
-            setActivePatient={setActivePatient}
-          />
-        )}
+     {currentView === 'dashboard' && (
+  <Dashboard
+    onNavigate={navigateTo}
+    department={department}
+    setActivePatient={setActivePatient}
+    user={user}
+  />
+)}
 
         {currentView === 'select-form' && activePatient && (
           <ClinicalFormSelection

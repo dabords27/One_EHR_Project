@@ -29,6 +29,7 @@ SELECT
   END AS patient_status,
 
   p.AdmissionDateTime AS date_admitted,
+pf.created_by,
 
   ISNULL(u.usr_custom_name, 'System') AS author_name
 

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Printer } from "lucide-react";
 import { Search, Eye, Edit3, ClipboardList, Filter } from "lucide-react";
@@ -9,6 +8,7 @@ interface RecordListProps {
   onEdit: (id: number) => void;
   onPrint: (id: number) => void;
 }
+
 interface RepositoryRecord {
   patient_form_id: number;
   template_name: string;
@@ -36,16 +36,19 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
   const [filteredRecords, setFilteredRecords] = useState<RepositoryRecord[]>([]);
 
   const [searchTerm, setSearchTerm] = useState("");
-const today = new Date().toLocaleDateString("en-CA", {
-  timeZone: "Asia/Manila"
-});
-const [patientStatusFilter, setPatientStatusFilter] = useState("Active");
-const [typeFilter, setTypeFilter] = useState("Inpatient");
-const [statusFilter, setStatusFilter] = useState("All");
 
-const [fromDate, setFromDate] = useState(today);
-const [toDate, setToDate] = useState(today);
+  const today = new Date().toLocaleDateString("en-CA", {
+    timeZone: "Asia/Manila"
+  });
 
+  const [patientStatusFilter, setPatientStatusFilter] = useState("Active");
+  const [typeFilter, setTypeFilter] = useState("Inpatient");
+  const [statusFilter, setStatusFilter] = useState("All");
+
+  const [fromDate, setFromDate] = useState(today);
+  const [toDate, setToDate] = useState(today);
+
+  const [authorFilter, setAuthorFilter] = useState<number | null>(null); /* ===== FIX ===== */
 
   const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
 
@@ -63,13 +66,34 @@ const [toDate, setToDate] = useState(today);
         }
       });
 
+      if (!res.ok) {
+        console.error("Failed to load repository");
+        return;
+      }
+
       const data = await res.json();
 
       setRecords(data);
-      setFilteredRecords(data);
+
+      const dashboardFilter = sessionStorage.getItem("dashboard_filter");
+
+      if (dashboardFilter) {
+
+        const parsed = JSON.parse(dashboardFilter);
+
+        /* ===== FIX ===== */
+        if (parsed.created_by) {
+          setAuthorFilter(parsed.created_by);
+        }
+
+        if (parsed.fromDate) setFromDate(parsed.fromDate);
+        if (parsed.toDate) setToDate(parsed.toDate);
+
+        sessionStorage.removeItem("dashboard_filter");
+
+      }
 
     };
-	
 
     loadRecords();
 
@@ -79,7 +103,7 @@ const [toDate, setToDate] = useState(today);
 
   useEffect(() => {
 
-    let result = records;
+    let result = [...records];
 
     if (searchTerm) {
 
@@ -99,34 +123,45 @@ const [toDate, setToDate] = useState(today);
     if (typeFilter !== "All") {
       result = result.filter(r => r.patient_type === typeFilter);
     }
-if (patientStatusFilter !== "All") {
-  result = result.filter(r => r.patient_status === patientStatusFilter);
-}
+
+    if (patientStatusFilter !== "All") {
+      result = result.filter(r => r.patient_status === patientStatusFilter);
+    }
+
     if (statusFilter !== "All") {
       result = result.filter(r => r.status === statusFilter);
     }
 
-if (fromDate) {
-  const start = new Date(fromDate + "T00:00:00");
+    /* ===== FIX ===== */
+    if (authorFilter !== null) {
+      result = result.filter((r: any) => r.created_by === authorFilter);
+    }
 
-  result = result.filter(r => {
-    const created = new Date(r.created_at);
-    return created >= start;
-  });
-}
+    if (fromDate) {
 
-if (toDate) {
-  const end = new Date(toDate + "T23:59:59");
+      const start = new Date(fromDate + "T00:00:00");
 
-  result = result.filter(r => {
-    const created = new Date(r.created_at);
-    return created <= end;
-  });
-}
+      result = result.filter(r => {
+        const created = new Date(r.created_at);
+        return created >= start;
+      });
+
+    }
+
+    if (toDate) {
+
+      const end = new Date(toDate + "T23:59:59");
+
+      result = result.filter(r => {
+        const created = new Date(r.created_at);
+        return created <= end;
+      });
+
+    }
 
     setFilteredRecords(result);
 
-  }, [searchTerm, typeFilter, patientStatusFilter, statusFilter, fromDate, toDate, records]);
+  }, [searchTerm, typeFilter, patientStatusFilter, statusFilter, authorFilter, fromDate, toDate, records]);
 
   /* ================= DATE FORMAT ================= */
 
@@ -216,6 +251,9 @@ if (toDate) {
             </select>
 
           </div>
+
+{/* Remaining UI unchanged exactly as your original */}
+
 
 {/* PATIENT STATUS */}
 
@@ -429,7 +467,7 @@ className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100"
 
                 <tr>
 
-                  <td colSpan={8} className="py-16 text-center text-slate-300">
+                  <td colSpan={9} className="py-16 text-center text-slate-300">
 
                     <ClipboardList size={48} className="mx-auto mb-3 opacity-20"/>
 
