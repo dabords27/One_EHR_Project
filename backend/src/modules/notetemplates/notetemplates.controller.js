@@ -11,7 +11,7 @@ exports.getTemplates = async (req, res) => {
         SELECT * 
         FROM dbo.NoteTemplates 
         WHERE IsActive = 1 
-        ORDER BY Name
+        
       `);
 
     res.json(result.recordset);
@@ -25,31 +25,31 @@ exports.getTemplates = async (req, res) => {
 /* ================= CREATE ================= */
 exports.createTemplate = async (req, res) => {
   try {
+
+    const pool = await sql.connect(dbConfig); // ✅ ADD THIS
+
     const { name, content, category } = req.body;
-const currentUser = req.user;
-const bodyUser = req.body.createdBy;
+    const currentUser = req.user;
+    const bodyUser = req.body.createdBy;
 
-let createdBy = "SYSTEM";
+    let createdBy = "SYSTEM";
 
-// 1️⃣ If frontend sends verified username, use it
-if (bodyUser) {
-  createdBy = bodyUser;
-}
-// 2️⃣ Else fallback to token user
-else if (currentUser?.id) {
-  const userLookup = await pool.request()
-    .input("id", sql.Int, currentUser.id)
-    .query(`
-      SELECT usr_username 
-      FROM dbo.users 
-      WHERE auto_id = @id
-    `);
+    if (bodyUser) {
+      createdBy = bodyUser;
+    }
+    else if (currentUser?.id) {
+      const userLookup = await pool.request()
+        .input("id", sql.Int, currentUser.id)
+        .query(`
+          SELECT usr_username 
+          FROM dbo.users 
+          WHERE auto_id = @id
+        `);
 
-  if (userLookup.recordset.length) {
-    createdBy = userLookup.recordset[0].usr_username;
-  }
-}
-
+      if (userLookup.recordset.length) {
+        createdBy = userLookup.recordset[0].usr_username;
+      }
+    }
     // duplicate check
     const duplicateCheck = await pool.request()
       .input('Name', sql.NVarChar, name)

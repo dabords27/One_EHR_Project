@@ -224,7 +224,7 @@ export const ClinicalFormSelection: React.FC<Props> = ({
   <select
     value={templateSort}
     onChange={(e) => setTemplateSort(e.target.value as any)}
-    className="px-4 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-200 rounded-xl shadow-sm hover:border-slate-300 focus:outline-none focus:ring-2 focus:ring-sky-500 transition"
+    className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600"
   >
     <option value="name">Sort by Name</option>
     <option value="date">Sort by Date Created</option>

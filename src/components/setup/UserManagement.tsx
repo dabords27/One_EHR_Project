@@ -68,6 +68,24 @@ const [pendingAction, setPendingAction] = useState<"save" | "status" | null>(nul
 const [isUsernameTaken, setIsUsernameTaken] = useState(false);
 const [isCheckingUsername, setIsCheckingUsername] = useState(false);
 
+const [sortConfig, setSortConfig] = useState<{
+  key: string | null;
+  direction: "asc" | "desc";
+}>({
+  key: "username",
+  direction: "asc"
+});
+
+const requestSort = (key: string) => {
+  let direction: "asc" | "desc" = "asc";
+
+  if (sortConfig.key === key && sortConfig.direction === "asc") {
+    direction = "desc";
+  }
+
+  setSortConfig({ key, direction });
+};
+
 const handleVerified = async (verifiedUser: { id: number; username: string }) => {
   setShowAuthModal(false);
 
@@ -405,16 +423,37 @@ statusLabel: u.usr_status_active ? "ACTIVE" : "DEACTIVATED",
     setUsers([]);
   }
 };
-const filteredUsers = users.filter((u: any) => {
-  const term = searchTerm.toLowerCase();
+const filteredUsers = React.useMemo(() => {
+  let filtered = users.filter((u: any) => {
+    const term = searchTerm.toLowerCase();
 
-  return (
-    u.username?.toLowerCase().includes(term) ||
-    u.fullName?.toLowerCase().includes(term) ||
-    u.userGroup?.toLowerCase().includes(term) ||
-    u.statusLabel?.toLowerCase().includes(term)
-  );
-});
+    return (
+      u.username?.toLowerCase().includes(term) ||
+      u.fullName?.toLowerCase().includes(term) ||
+      u.userGroup?.toLowerCase().includes(term) ||
+      u.statusLabel?.toLowerCase().includes(term)
+    );
+  });
+
+  if (sortConfig.key) {
+    filtered.sort((a: any, b: any) => {
+      let aValue = a[sortConfig.key!];
+      let bValue = b[sortConfig.key!];
+
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+
+      return 0;
+    });
+  }
+
+  return filtered;
+}, [users, searchTerm, sortConfig]);
 
 
 const performSave = async (verifiedUsername: string) => {
@@ -990,18 +1029,38 @@ const handleToggleStatus = async (verifiedUsername: string) => {
       <table className="w-full text-left">
         <thead>
           <tr className="bg-slate-50 border-b border-slate-200">
-            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest w-32 text-center">
-              Username
-            </th>
-            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              Full Name
-            </th>
-            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-              Group
-            </th>
-            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-              Status
-            </th>
+        <th
+  onClick={() => requestSort("username")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Username {sortConfig.key === "username" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("fullName")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer select-none"
+>
+  Full Name {sortConfig.key === "fullName" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("userGroup")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Group {sortConfig.key === "userGroup" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("statusLabel")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Status {sortConfig.key === "statusLabel" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
             <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
   Actions
 </th>

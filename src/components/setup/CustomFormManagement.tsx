@@ -23,6 +23,24 @@ export const CustomFormManagement: React.FC<Props> = ({
   const [departments, setDepartments] = useState<any[]>([]);
 const [selectedDepartments, setSelectedDepartments] = useState<number[]>([]);
 
+const [sortConfig, setSortConfig] = useState<{
+  key: string | null;
+  direction: "asc" | "desc";
+}>({
+  key: "template_name",
+  direction: "asc"
+});
+
+const requestSort = (key: string) => {
+  let direction: "asc" | "desc" = "asc";
+
+  if (sortConfig.key === key && sortConfig.direction === "asc") {
+    direction = "desc";
+  }
+
+  setSortConfig({ key, direction });
+};
+
 const [pendingToggleId, setPendingToggleId] = useState<number | null>(null);
 const [pendingToggleValue, setPendingToggleValue] = useState<boolean | null>(null);
 
@@ -228,6 +246,37 @@ if (statusModal.template) {
     setTimeout(() => setTxStatus("idle"), 2000);
   }
 };
+
+
+// sorting logic
+const sortedTemplates = React.useMemo(() => {
+
+  let filtered = templates.filter((t: any) =>
+    t.template_name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (sortConfig.key) {
+    filtered.sort((a: any, b: any) => {
+
+      const aValue = a[sortConfig.key!];
+      const bValue = b[sortConfig.key!];
+
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+
+      return 0;
+    });
+  }
+
+  return filtered;
+
+}, [templates, searchTerm, sortConfig]);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
@@ -461,18 +510,38 @@ if (statusModal.template) {
   <table className="w-full text-left">
     <thead>
       <tr className="bg-slate-50 border-b border-slate-200">
-        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-          Template Name
-        </th>
-        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-          Pages
-        </th>
-		  <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-          Paper Size
-        </th>
-        <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
-          Orientation
-        </th>
+      <th
+  onClick={() => requestSort("template_name")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer select-none"
+>
+  Template Name {sortConfig.key === "template_name" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("total_pages")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Pages {sortConfig.key === "total_pages" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("paper_size")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Paper Size {sortConfig.key === "paper_size" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("orientation")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center cursor-pointer select-none"
+>
+  Orientation {sortConfig.key === "orientation" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
   Actions
 </th>
@@ -480,11 +549,9 @@ if (statusModal.template) {
     </thead>
 
     <tbody className="divide-y divide-slate-100">
-   {templates
-  .filter((t: any) =>
-    t.template_name.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-  .map((t: any) => (
+{sortedTemplates.map((t: any) => (
+  
+  
 <tr key={t.template_id} className="hover:bg-slate-50 transition-colors">
   <td className="px-8 py-5 font-black text-slate-700 uppercase text-sm">
     {t.template_name}

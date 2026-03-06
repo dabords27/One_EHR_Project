@@ -25,6 +25,7 @@ export const NoteTemplateManagement: React.FC<NoteTemplateManagementProps> = ({ 
   const [editId, setEditId] = useState<string | null>(null);
 
   const [search, setSearch] = useState('');
+  const [templateSort, setTemplateSort] = useState<"name" | "date">("name");
   const [txStatus, setTxStatus] = useState<TransactionStatus>('idle');
   const [txMsg, setTxMsg] = useState('');
 
@@ -58,12 +59,13 @@ export const NoteTemplateManagement: React.FC<NoteTemplateManagementProps> = ({ 
         return;
       }
 
-      const mapped = data.map((t: any) => ({
-        id: String(t.Id),
-        name: t.Name,
-        content: t.Content,
-        category: t.Category?.toUpperCase() || 'GENERAL'
-      }));
+     const mapped = data.map((t: any) => ({
+  id: String(t.Id),
+  name: t.Name,
+  content: t.Content,
+  category: t.Category?.toUpperCase() || 'GENERAL',
+  created_at: t.CreatedDate || null
+}));
 
       setTemplates(mapped);
 
@@ -174,10 +176,19 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
       const method = editId ? "PUT" : "POST";
       const url = editId ? `${API_URL}/${editId}` : API_URL;
 
-      const body = editId
-        ? { ...formData, updatedBy: verifiedUser.username }
-        : { ...formData, createdBy: verifiedUser.username };
-
+const body = editId
+  ? {
+      name: formData.name,
+      content: formData.content,
+      category: formData.category,
+      updatedBy: verifiedUser.username
+    }
+  : {
+      name: formData.name,
+      content: formData.content,
+      category: formData.category,
+      createdBy: verifiedUser.username
+    };
       const res = await fetch(url, {
         method,
         headers: getAuthHeaders(),
@@ -213,11 +224,28 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
   }
 };
 
-  // ================= FILTER =================
-  const filteredTemplates = templates.filter(t =>
-    t.name.toUpperCase().includes(search.toUpperCase())
-  );
 
+// ================= FILTER =================
+// ================= FILTER =================
+const filteredTemplates = [...templates]
+  .filter(t =>
+    t.name.toUpperCase().includes(search.toUpperCase())
+  )
+  .sort((a, b) => {
+
+    if (templateSort === "name") {
+      return a.name.localeCompare(b.name);
+    }
+
+    if (templateSort === "date") {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+
+      return dateA - dateB; // OLDEST → NEWEST (newest at bottom)
+    }
+
+    return 0;
+  });
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
 
@@ -257,19 +285,36 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
         )}
       </div>
 
-      {/* SEARCH */}
-      {!showForm && (
-        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2">
-          <Search size={16} className="text-slate-400" />
-          <input
-            type="text"
-            placeholder="Search template..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full outline-none text-sm"
-          />
-        </div>
-      )}
+{/* SEARCH + SORT */}
+{!showForm && (
+  <div className="flex items-center gap-4">
+
+    {/* SEARCH */}
+    <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-xl px-4 py-2 flex-1">
+      <Search size={16} className="text-slate-400" />
+      <input
+        type="text"
+        placeholder="Search template..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full outline-none text-sm"
+      />
+    </div>
+
+    {/* SORT */}
+    <select
+      value={templateSort}
+      onChange={(e) =>
+        setTemplateSort(e.target.value as "name" | "date")
+      }
+      className="bg-white border border-slate-200 rounded-xl px-4 py-2 text-xs font-black uppercase tracking-wide text-slate-600"
+    >
+      <option value="name">Sort by Name</option>
+      <option value="date">Sort by Date Created</option>
+    </select>
+
+  </div>
+)}	
 	  {/* TEMPLATE LIST */}
 {!showForm && (
   <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">

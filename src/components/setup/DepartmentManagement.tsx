@@ -36,6 +36,26 @@ export const DepartmentManagement: React.FC<DepartmentManagementProps> = ({ onBa
   const [editId, setEditId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [depts, setDepts] = useState<DepartmentEntry[]>([]);
+  
+  const [sortConfig, setSortConfig] = useState<{
+  key: string | null;
+  direction: "asc" | "desc";
+}>({
+  key: "code",
+  direction: "asc"
+});
+
+const requestSort = (key: string) => {
+  let direction: "asc" | "desc" = "asc";
+
+  if (sortConfig.key === key && sortConfig.direction === "asc") {
+    direction = "desc";
+  }
+
+  setSortConfig({ key, direction });
+};
+
+
 
   const [formData, setFormData] = useState({
     name: "",
@@ -324,14 +344,39 @@ const handleVerified = (verifiedUser: { id: number; username: string }) => {
   setPendingAction(null);
 };
 
-const filteredDepts = depts.filter((dept) => {
-  const term = searchTerm.toLowerCase();
-  return (
-    dept.code.toLowerCase().includes(term) ||
-    dept.name.toLowerCase().includes(term) ||
-    dept.status.toLowerCase().includes(term)
-  );
-});
+const filteredDepts = React.useMemo(() => {
+
+  let filtered = depts.filter((dept) => {
+    const term = searchTerm.toLowerCase();
+
+    return (
+      dept.code.toLowerCase().includes(term) ||
+      dept.name.toLowerCase().includes(term) ||
+      dept.status.toLowerCase().includes(term)
+    );
+  });
+
+  if (sortConfig.key) {
+    filtered.sort((a: any, b: any) => {
+
+      let aValue = a[sortConfig.key!];
+      let bValue = b[sortConfig.key!];
+
+      if (aValue < bValue) {
+        return sortConfig.direction === "asc" ? -1 : 1;
+      }
+
+      if (aValue > bValue) {
+        return sortConfig.direction === "asc" ? 1 : -1;
+      }
+
+      return 0;
+    });
+  }
+
+  return filtered;
+
+}, [depts, searchTerm, sortConfig]);
   /* ================= UI ================= */
 
   return (
@@ -478,15 +523,30 @@ const filteredDepts = depts.filter((dept) => {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-32">
-                  Code
-                </th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Department Name
-                </th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-32">
-                  Status
-                </th>
+<th
+  onClick={() => requestSort("code")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-32 cursor-pointer select-none"
+>
+  Code {sortConfig.key === "code" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("name")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest cursor-pointer select-none"
+>
+  Department Name {sortConfig.key === "name" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
+<th
+  onClick={() => requestSort("status")}
+  className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center w-32 cursor-pointer select-none"
+>
+  Status {sortConfig.key === "status" && (
+    sortConfig.direction === "asc" ? "▲" : "▼"
+  )}
+</th>
             <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">
   Actions
 </th>
