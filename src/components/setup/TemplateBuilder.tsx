@@ -67,7 +67,6 @@ export const TemplateBuilder: React.FC<Props> = ({
 }) => {
   
   const { user } = useAuth();
-  console.log("AUTH USER:", user);
   const [txStatus, setTxStatus] = useState<"idle" | "loading" | "success" | "error">("idle");
 const [txMsg, setTxMsg] = useState("");
   const generateFieldName = (label: string) => {
@@ -196,7 +195,7 @@ const addField = (type: string) => {
     xPercent: 0.2,
     yPercent: 0.2,
     widthPercent: 0.15,
-    heightPercent: 0.05,
+    heightPercent: 0.03,
 
     fieldName: `${baseName}_${uniqueId}`,
     label: `${type} field`,

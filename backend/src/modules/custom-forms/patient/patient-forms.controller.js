@@ -1,11 +1,13 @@
 const sql = require("mssql");
 
 
+
 exports.saveDraft = async (req, res) => {
 
   const pool = req.app.locals.pool;
 
   const {
+    patient_form_id,
     patient_id,
     template_id,
     department_id,
@@ -13,11 +15,33 @@ exports.saveDraft = async (req, res) => {
     filled_data
   } = req.body;
 
-const user_id = req.user.id;
+  const user_id = req.user.id;
 
   try {
 
-    await pool.request()
+// EDIT EXISTING DRAFT
+if (patient_form_id) {
+
+  await pool.request()
+    .input("patient_form_id", sql.Int, patient_form_id)
+    .input("filled_data", sql.NVarChar(sql.MAX), JSON.stringify(filled_data))
+    .query(`
+      UPDATE dbo.PatientCustomForms
+      SET
+        filled_data = @filled_data
+      WHERE patient_form_id = @patient_form_id
+      AND status = 'DRAFT'
+    `);
+
+  return res.json({
+    success: true,
+    patient_form_id
+  });
+
+}
+
+    // CREATE NEW DRAFT
+    const result = await pool.request()
       .input("patient_id", sql.Int, patient_id)
       .input("template_id", sql.Int, template_id)
       .input("department_id", sql.Int, department_id)
@@ -36,6 +60,7 @@ const user_id = req.user.id;
           date_created,
           status
         )
+        OUTPUT INSERTED.patient_form_id
         VALUES
         (
           @patient_id,
@@ -49,7 +74,12 @@ const user_id = req.user.id;
         )
       `);
 
-    res.json({ success: true });
+    const newId = result.recordset[0].patient_form_id;
+
+    res.json({
+      success: true,
+      patient_form_id: newId
+    });
 
   } catch (err) {
 
@@ -60,6 +90,7 @@ const user_id = req.user.id;
 
 };
 
+
 exports.finalizeForm = async (req, res) => {
 
   const pool = req.app.locals.pool;
@@ -69,7 +100,7 @@ exports.finalizeForm = async (req, res) => {
     filled_data
   } = req.body;
 
-  const user_id = req.user.user_id;
+const user_id = req.user.id;
 
   try {
 
@@ -99,6 +130,7 @@ exports.finalizeForm = async (req, res) => {
   }
 
 };
+
 
 exports.getPatientForms = async (req, res) => {
 
@@ -131,6 +163,7 @@ exports.getPatientForms = async (req, res) => {
 
 };
 
+
 exports.getFormById = async (req, res) => {
 
   const pool = req.app.locals.pool;
@@ -156,8 +189,6 @@ exports.getFormById = async (req, res) => {
   }
 
 };
-
-
 
 
 exports.getPatientRegistry = async (req, res) => {

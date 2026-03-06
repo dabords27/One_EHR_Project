@@ -35,8 +35,8 @@ const [printRecordId, setPrintRecordId] = useState<number | null>(null);
 /* ================= RESTORE SESSION ================= */
 
 useEffect(() => {
-  const savedUser = localStorage.getItem('dl_suite_user');
-  const savedDept = localStorage.getItem('dl_suite_dept');
+const savedUser = sessionStorage.getItem('dl_suite_user');
+const savedDept = sessionStorage.getItem('dl_suite_dept');
 
   if (savedUser) {
     const parsedUser = JSON.parse(savedUser) as User;
@@ -104,11 +104,44 @@ useEffect(() => {
   };
 }, [user]);
 
+
+
+/* ================= LOGOUT ON TAB / BROWSER CLOSE ================= */
+
+useEffect(() => {
+  if (!user) return;
+
+  const handleBeforeUnload = () => {
+    sessionStorage.setItem("ehr_closing", "true");
+
+    setTimeout(() => {
+      const closing = sessionStorage.getItem("ehr_closing");
+
+      if (closing === "true") {
+        localStorage.removeItem("dl_suite_user");
+        localStorage.removeItem("dl_suite_dept");
+      }
+    }, 100);
+  };
+
+  const handleLoad = () => {
+    sessionStorage.removeItem("ehr_closing");
+  };
+
+  window.addEventListener("beforeunload", handleBeforeUnload);
+  window.addEventListener("load", handleLoad);
+
+  return () => {
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+    window.removeEventListener("load", handleLoad);
+  };
+}, [user]);
+
   /* ================= AUTH ================= */
 
   const handleLogin = (loggedInUser: User) => {
     setUser(loggedInUser);
-    localStorage.setItem('dl_suite_user', JSON.stringify(loggedInUser));
+    sessionStorage.setItem('dl_suite_user', JSON.stringify(loggedInUser));
     localStorage.setItem('last_login_username', loggedInUser.username);
 
     if (loggedInUser.defaultDepartment) {
@@ -118,7 +151,7 @@ useEffect(() => {
 
   const handleSelectDepartment = (dept: Department) => {
     setDepartment(dept);
-    localStorage.setItem('dl_suite_dept', JSON.stringify(dept));
+    sessionStorage.setItem('dl_suite_dept', JSON.stringify(dept));
     setCurrentView('dashboard');
   };
 
@@ -134,8 +167,8 @@ useEffect(() => {
     setDepartment(null);
     setActivePatient(null);
     setSelectedFormType(null);
-    localStorage.removeItem('dl_suite_user');
-    localStorage.removeItem('dl_suite_dept');
+sessionStorage.removeItem('dl_suite_user');
+sessionStorage.removeItem('dl_suite_dept');
     setIsSignOutModalOpen(false);
   };
 

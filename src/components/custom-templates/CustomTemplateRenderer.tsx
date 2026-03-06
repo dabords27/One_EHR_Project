@@ -134,8 +134,9 @@ const resolveSystemValue = (bindingKey: string) => {
   );
 
 
+
   const commonInputClass =
-    "w-full h-full text-[12px] border border-slate-300 px-2 py-1 bg-white";
+  "w-full h-full border border-slate-300 px-1 bg-white leading-tight";
 
   return (
     <>
@@ -157,13 +158,19 @@ const resolveSystemValue = (bindingKey: string) => {
 // 🔍 DEBUG SYSTEM VALUE
 if (isSystemField) {
 }
-
 const style = {
   position: "absolute",
+
   width: field.widthPercent * pdfDimensions.width,
   height: field.heightPercent * pdfDimensions.height,
   left: field.xPercent * pdfDimensions.width,
-  top: field.yPercent * pdfDimensions.height
+  top: field.yPercent * pdfDimensions.height,
+
+  fontSize: (field.fontSize || 12) * zoom,
+  fontWeight: field.fontWeight || "normal",
+  fontStyle: field.fontStyle || "normal",
+  textAlign: field.textAlign || "left",
+  fontFamily: field.fontFamily || "Calibri"
 };
 
           return (
@@ -198,26 +205,33 @@ const style = {
               />
             )}
 
-            {/* SELECT */}
-            {field.type === "select" && (
-              <select
-                value={value}
-                disabled={isDisabled}
-                onChange={(e) => {
-                  if (isDisabled) return;
-                  onChange(field.id, e.target.value);
-                }}
-                className={commonInputClass}
-              >
-                <option value="">Select</option>
-                {(field.options || []).map((opt: string, idx: number) => (
-                  <option key={`${field.id}-${opt}`} value={opt}>
-                    {opt}
-                  </option>
-                ))}
-              </select>
-            )}
+       {/* SELECT */}
+{field.type === "select" && (
+  <>
+    {/* Screen dropdown */}
+    <select
+      value={value}
+      disabled={isDisabled}
+      onChange={(e) => {
+        if (isDisabled) return;
+        onChange(field.id, e.target.value);
+      }}
+      className={`${commonInputClass} screen-only`}
+    >
+      <option value="">Select</option>
+      {(field.options || []).map((opt: string, idx: number) => (
+        <option key={`${field.id}-${opt}`} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
 
+    {/* Print value */}
+    <div className="print-only w-full h-full px-2 py-1">
+      {value}
+    </div>
+  </>
+)}
             {/* CHECKBOX */}
             {field.type === "checkbox" && (
               <input
@@ -233,7 +247,7 @@ const style = {
 
             {/* RADIO BUTTON */}
             {field.type === "radio_button" && (
-              <div className="flex flex-col gap-1 text-[12px]">
+            <div className="flex flex-col gap-1">
                 {(field.options || []).map((opt: string, idx: number) => (
                   <label key={idx} className="flex items-center gap-2">
                     <input

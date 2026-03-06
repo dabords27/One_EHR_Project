@@ -130,20 +130,18 @@ setPatient(data.patient ?? null);
 
         <Document file={pdfUrl}>
 
-          <Page
-            pageNumber={1}
-            width={794}
-            renderTextLayer={false}
-            renderAnnotationLayer={false}
-            onLoadSuccess={(page) => {
-
-              setPdfDimensions({
-                width: page.width,
-                height: page.height
-              });
-
-            }}
-          />
+     <Page
+  pageNumber={1}
+  width={780}
+  renderTextLayer={false}
+  renderAnnotationLayer={false}
+  onLoadSuccess={(page) => {
+    setPdfDimensions({
+      width: page.width,
+      height: page.height
+    });
+  }}
+/>
 
         </Document>
 
@@ -179,51 +177,70 @@ setPatient(data.patient ?? null);
 
       </div>
 
+{/* ================= PRINT CSS ================= */}
+<style>
+{`
+.screen-only {
+  display: block;
+}
 
-      {/* ================= PRINT CSS ================= */}
+.print-only {
+  display: none;
+}
+@media print {
 
-      <style>
-        {`
-        @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
 
-          @page {
-            size: A4 portrait;
-            margin: 0;
-          }
+  html, body {
+    margin: 0;
+    padding: 0;
+  }
 
-          body {
-            margin: 0;
-          }
+  /* Hide everything first */
+  body * {
+    visibility: hidden;
+  }
 
-          input,
-          textarea,
-          select {
-            border: none !important;
-            outline: none !important;
-            background: transparent !important;
-            box-shadow: none !important;
-          }
+  /* Show only the print container */
+  #print-root,
+  #print-root * {
+    visibility: visible;
+  }
 
-          body * {
-            visibility: hidden;
-          }
+  /* Let the PDF control size (prevents 2-page scaling) */
+  #print-root {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    height: auto !important;
+  }
 
-          #print-root,
-          #print-root * {
-            visibility: visible;
-          }
+  /* Remove borders from inputs */
+  input,
+  textarea,
+  select {
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    appearance: none !important;
+    -webkit-appearance: none !important;
+    -moz-appearance: none !important;
+    pointer-events: none !important;
+    padding: 0 !important;
+  }
 
-          #print-root {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 794px;
-            height: 1123px;
-          }
+  select::-ms-expand {
+    display: none;
+  }
 
-        }
-        `}
-      </style>
+}
+`}
+</style>
 
     </div>
 

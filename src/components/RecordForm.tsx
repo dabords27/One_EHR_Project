@@ -308,9 +308,12 @@ export const RecordForm: React.FC<RecordFormProps> = ({
     patient={patient}
     department={department}
     user={user}
-    initialFormData={formData}   // ⭐ ADD THIS
-    editId={editId}              // ⭐ ADD THIS
-    onClose={() => setActiveTemplate(null)}
+    initialFormData={formData}
+    editId={editId}
+    onClose={() => {
+      setActiveTemplate(null)
+      onSuccess()
+    }}
     onSaved={onSuccess}
   />
 )}
