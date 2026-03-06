@@ -95,7 +95,7 @@ const pdfUrl = `${API_BASE}/uploads/custom-forms/${template.template_id}/templat
 ========================= */
 
 useEffect(() => {
-  console.log("Current formId:", formId)
+
 }, [formId])
 
 /* =========================
@@ -119,7 +119,7 @@ useEffect(() => {
 
       const data = await res.json()
 
-      console.log("REGISTRY RESPONSE:", data)
+
 
       if (data) {
         setSystemData(data)
@@ -230,29 +230,43 @@ useEffect(() => {
 
     const data = await res.json()
 
-    const mappedFields = data.map((field: any) => ({
-      id: String(field.field_id),
-      type: field.field_type,
-      page: field.page_number,
-      xPercent: field.x,
-      yPercent: field.y,
-      widthPercent: field.width,
-      heightPercent: field.height,
-      label: field.label,
-      placeholder: field.placeholder,
-      options: field.options || [],
-      fontSize: field.font_size,
-      fontWeight: "normal",
-      textAlign: "left",
-      fontFamily: "Calibri",
-      systemBinding: field.system_binding,
-      dataSource: field.data_source || "manual",
-    }))
+const mappedFields = data.map((field: any) => ({
 
-    setRuntimeTemplate({
-      ...template,
-      fields: mappedFields
-    })
+  id: String(field.field_id),
+  type: field.field_type,
+  page: field.page_number,
+
+  fieldName: field.field_key,   // ⭐ REQUIRED FOR FORMULA
+
+  xPercent: field.x,
+  yPercent: field.y,
+  widthPercent: field.width,
+  heightPercent: field.height,
+
+  label: field.label,
+  placeholder: field.placeholder,
+
+  options: field.options || [],
+
+  formulaExpression: field.formula_expression,
+  resultType: field.result_type,
+
+  fontSize: field.font_size,
+  fontWeight: field.font_weight || "normal",
+  fontStyle: field.font_style || "normal",
+  textAlign: field.text_align || "left",
+  fontFamily: field.font_family || "Calibri",
+
+  listOrientation: field.list_orientation || "vertical",
+
+  systemBinding: field.system_binding,
+  dataSource: field.data_source || "manual"
+
+}));
+   setRuntimeTemplate(prev => ({
+  ...prev,
+  fields: mappedFields
+}))
 
   }
 
@@ -321,7 +335,7 @@ if (!res.ok) {
 
 const data = await res.json()
 
-console.log("SAVE DRAFT API RESPONSE:", data)
+
 
 const elapsed = Date.now() - startTime
 const minTime = 600
@@ -609,7 +623,12 @@ style={{
 <CustomTemplateRenderer
   template={runtimeTemplate}
   formData={formData}
-  systemData={systemData}
+  systemData={{
+  ...systemData,
+  username: user?.username || authUser?.username,
+  displayName: user?.displayName || authUser?.displayName,
+  fullName: user?.fullName || authUser?.fullName
+}}
   currentPage={currentPage}
   pdfDimensions={pdfDimensions}
   zoom={zoom}

@@ -67,8 +67,7 @@ if (!user) return;
       if (!res.ok) return;
 
 const data = await res.json();
-console.log("USER:", user?.usr_custom_name);
-console.log("DATA:", data);
+
 
 const today = new Date().toLocaleDateString("en-CA", {
   timeZone: "Asia/Manila"

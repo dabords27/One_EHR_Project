@@ -23,7 +23,7 @@ export const TemplateSelector: React.FC<Props> = ({
     <div className="grid grid-cols-3 gap-6">
       {templates.map((template) => (
         <div
-          key={template.id}
+         key={`template-${template.template_id}`}
           className="bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 p-6 flex flex-col justify-between"
         >
           {/* Top Section */}

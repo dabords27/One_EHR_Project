@@ -149,6 +149,7 @@ const mappedFields: TemplateField[] = data.map((field: any) => ({
 };
 
 const [pdfFile, setPdfFile] = useState<File | null>(null);
+const [pdfExists, setPdfExists] = useState<boolean | null>(null);
 const [numPages, setNumPages] = useState<number>(0);
 const [currentPage, setCurrentPage] = useState<number>(1);
 const [scale, setScale] = useState<number>(2);
@@ -167,6 +168,23 @@ const [imageToDelete, setImageToDelete] = useState<string | null>(null);
 const [isPreviewMode, setIsPreviewMode] = useState(false);
 const [previewValues, setPreviewValues] = useState<Record<string, any>>({});
 const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+
+useEffect(() => {
+  const checkPdf = async () => {
+    try {
+      const response = await fetch(
+        `${API_BASE}/uploads/custom-forms/${templateId}/template.pdf`,
+        { method: "HEAD" }
+      );
+
+      setPdfExists(response.ok);
+    } catch {
+      setPdfExists(false);
+    }
+  };
+
+  checkPdf();
+}, [templateId]);
 
 
 
@@ -261,7 +279,12 @@ const saveFields = async (verifiedUser: any) => {
         },
         body: JSON.stringify({
           page_number: currentPage,
-          fields: fields.filter(f => f.page === currentPage),
+          fields: fields
+  .filter(f => f.page === currentPage)
+  .map(f => ({
+    ...f,
+    list_orientation: f.listOrientation
+  })),
           created_by: verifiedUser.id
         })
       }
@@ -366,53 +389,47 @@ const computeFormula = (field: TemplateField) => {
   try {
     let expression = field.formulaExpression;
 
-    // 🔥 AGE(fieldName) support
-    const ageMatch = expression.match(/AGE\((.*?)\)/);
+    // 🔹 Track if required fields have values
+    let hasMissingValue = false;
 
-    if (ageMatch) {
-      const birthFieldName = ageMatch[1].trim();
-
-      const birthField = fields.find(
-        f => f.fieldName === birthFieldName
-      );
-
-      if (birthField) {
-        const birthValue = previewValues[birthField.id];
-        const age = computeAge(birthValue);
-
-        expression = expression.replace(ageMatch[0], age.toString());
-      }
-    }
-
-    // 🔹 Existing numeric replacement
     fields.forEach(f => {
-      let value = previewValues[f.id];
+      const nameRegex = new RegExp(`\\b${f.label}\\b`, "gi");
 
-      if (value === undefined || value === "") {
-        value = 0;
+      if (nameRegex.test(expression)) {
+
+       let value = previewValues[f.fieldName];
+
+        // 🚨 If value is empty → return blank
+        if (value === undefined || value === "") {
+          hasMissingValue = true;
+          return;
+        }
+
+        // Handle %
+        if (typeof value === "string" && value.endsWith("%")) {
+          value = value.replace("%", "");
+        }
+
+        if (isNaN(Number(value))) {
+          hasMissingValue = true;
+          return;
+        }
+
+        expression = expression.replace(nameRegex, Number(value).toString());
       }
-
-      if (typeof value === "string" && value.endsWith("%")) {
-        value = value.replace("%", "");
-      }
-
-      if (isNaN(Number(value))) {
-        value = 0;
-      }
-
-      const safeValue = Number(value).toString();
-
-      const nameRegex = new RegExp(`\\b${f.fieldName}\\b`, "g");
-      expression = expression.replace(nameRegex, safeValue);
     });
 
+    // 🔥 If any field missing → return blank
+    if (hasMissingValue) return "";
+
+    // 🔹 Validate expression
     if (!/^[0-9+\-*/().\s]+$/.test(expression)) {
-      throw new Error("Invalid characters");
+      return "";
     }
 
     const result = Function(`"use strict"; return (${expression})`)();
 
-    if (isNaN(result)) return "Invalid";
+    if (isNaN(result)) return "";
 
     if (field.resultType === "percentage") {
       return result + "%";
@@ -420,10 +437,10 @@ const computeFormula = (field: TemplateField) => {
 
     return result;
 
-  } catch (err: any) {
-    return err.message || "Error";
+  } catch {
+    return "";
   }
-}; 
+};
 
 useEffect(() => {
   if (isPreviewMode) {
@@ -475,7 +492,7 @@ if (
 
     setFields(prev =>
       prev.map(field => {
-        if (field.id !== selectedField.id) return field;
+       if (field.id !== selectedField.id) return field;
 
         let deltaX = 0;
         let deltaY = 0;
@@ -569,6 +586,7 @@ const response = await fetch(
 
     // 🔥 Clear local preview so it reloads from server
     setPdfFile(null);
+	setPdfExists(true); // ADD THIS
 
   }}
   className="text-xs"
@@ -718,21 +736,32 @@ className={`px-4 py-2 text-xs font-bold rounded-lg ${
 
   </div>
 </div>
-
-     {/* PDF AREA */}
+{/* PDF AREA */}
 <div className="flex-1 overflow-auto bg-slate-100 py-10">
   <div className="max-w-[1100px] mx-auto flex justify-center">
 
-    <Document
-     
-      file={pdfFile ?? pdfFileSource}
-      onLoadSuccess={(pdf) => {
-        setNumPages(pdf.numPages);
-      }}
-      onLoadError={() => {
-        setNumPages(0);
-      }}
-    >
+{pdfExists === null ? (
+  <div className="flex items-center justify-center h-[600px] text-slate-400 text-sm font-bold">
+    Loading template...
+  </div>
+) : pdfExists === false && !pdfFile ? (
+<div className="flex flex-col items-center justify-center h-[600px] text-slate-400">
+  <div className="text-4xl mb-3">📄</div>
+  <div className="text-sm font-bold">
+    Upload PDF to Start Building
+  </div>
+</div>
+) : (
+<Document
+  file={pdfFile ?? pdfFileSource}
+  onLoadSuccess={(pdf) => {
+    setNumPages(pdf.numPages);
+    setPdfExists(true);
+  }}
+  onLoadError={() => {
+    setPdfExists(false);
+  }}
+>
       <div className="relative shadow-2xl bg-white inline-block">
 
         <Page
@@ -748,14 +777,28 @@ className={`px-4 py-2 text-xs font-bold rounded-lg ${
 {/* FIELD OVERLAY */}
 <div className="absolute inset-0 z-10">
   {fields
-    .filter(f => f.page === currentPage)
-    .map(field => {
+  .filter(f => f.page === currentPage)
+  .map(field => {
+
+const orientation =
+  field.listOrientation ||
+  field.list_orientation ||
+  field.orientation ||
+  "vertical";
 
 if (isPreviewMode) {
 const isSystemField = field.dataSource === "system";
+const previewFontStyle = {
+  fontSize: field.fontSize,
+  fontWeight: field.fontWeight,
+  fontFamily: field.fontFamily,
+  fontStyle: field.fontStyle,
+  textAlign: field.textAlign,
+};
+
   return (
     <div
-      key={field.id}
+      key={field.fieldName}
       style={{
         position: "absolute",
         width: pdfDimensions
@@ -784,12 +827,13 @@ const isSystemField = field.dataSource === "system";
 
   // 🔹 PERCENTAGE
   if (field.inputType === "percentage") {
-    const currentValue = previewValues[field.id] ?? "";
+    const currentValue = previewValues[field.fieldName] ?? "";
 
     return (
       <input
         type="text"
 		disabled={isSystemField}
+		style={previewFontStyle}
         value={currentValue}
         placeholder={field.placeholder || ""}
         onChange={(e) => {
@@ -810,7 +854,7 @@ const isSystemField = field.dataSource === "system";
 
           setPreviewValues(prev => ({
             ...prev,
-            [field.id]: value
+            [field.fieldName]: value
           }));
         }}
         className="w-full outline-none text-slate-700"
@@ -824,13 +868,14 @@ const isSystemField = field.dataSource === "system";
       <input
         type="text"
 		disabled={isSystemField}
-        value={previewValues[field.id] || ""}
+		style={previewFontStyle}
+        value={previewValues[field.fieldName] || ""}
         placeholder={field.placeholder || ""}
         onChange={(e) => {
           const value = e.target.value.replace(/[^0-9]/g, "");
           setPreviewValues(prev => ({
             ...prev,
-            [field.id]: value
+            [field.fieldName]: value
           }));
         }}
         className="w-full outline-none text-slate-700"
@@ -844,7 +889,8 @@ const isSystemField = field.dataSource === "system";
       <input
         type="text"
 		disabled={isSystemField}
-        value={previewValues[field.id] || ""}
+		style={previewFontStyle}
+        value={previewValues[field.fieldName] || ""}
         placeholder={field.placeholder || ""}
         onChange={(e) => {
           let value = e.target.value.replace(/[^0-9.]/g, "");
@@ -856,7 +902,7 @@ const isSystemField = field.dataSource === "system";
 
           setPreviewValues(prev => ({
             ...prev,
-            [field.id]: value
+            [field.fieldName]: value
           }));
         }}
         className="w-full outline-none text-slate-700"
@@ -868,15 +914,16 @@ const isSystemField = field.dataSource === "system";
   return (
 <input
   type="text"
-  value={previewValues[field.id] || ""}
+  value={previewValues[field.fieldName] || ""}
   placeholder={field.placeholder || ""}
   disabled={isSystemField}
+  style={previewFontStyle}
   onChange={(e) => {
     if (isSystemField) return;
 
     setPreviewValues(prev => ({
       ...prev,
-      [field.id]: e.target.value
+      [field.fieldName]: e.target.value
     }));
   }}
   className={`w-full outline-none text-slate-700 ${
@@ -891,17 +938,18 @@ const isSystemField = field.dataSource === "system";
       {field.type === "select" && (
         <select
 		disabled={isSystemField}
-          value={previewValues[field.id] || ""}
+		style={previewFontStyle}
+          value={previewValues[field.fieldName] || ""}
           onChange={(e) =>
             setPreviewValues(prev => ({
               ...prev,
-              [field.id]: e.target.value
+              [field.fieldName]: e.target.value
             }))
           }
           className="w-full border border-slate-300 text-xs bg-white"
         >
           {(field.options?.length ? field.options : ["Option 1"]).map((opt, index) => (
-            <option key={index} value={opt}>
+            <option key={`${field.fieldName}-${opt}`} value={opt}>
               {opt}
             </option>
           ))}
@@ -913,11 +961,12 @@ const isSystemField = field.dataSource === "system";
   <input
   disabled={isSystemField}
     type="checkbox"
-    checked={previewValues[field.id] || false}
+	style={previewFontStyle}
+    checked={previewValues[field.fieldName] || false}
     onChange={(e) =>
       setPreviewValues(prev => ({
         ...prev,
-        [field.id]: e.target.checked
+        [field.fieldName]: e.target.checked
       }))
     }
   />
@@ -927,39 +976,40 @@ const isSystemField = field.dataSource === "system";
 {field.type === "list" && (
   <div
     className={`${
-      field.listOrientation === "horizontal"
+      orientation === "horizontal"
         ? "flex flex-wrap gap-4"
         : "flex flex-col gap-1"
     } text-xs`}
   >
     {(field.options || []).map((opt, index) => {
-      const selectedValues: string[] = previewValues[field.id] || [];
+      const selectedValues: string[] = previewValues[field.fieldName] || [];
 
       return (
-        <label key={index} className="flex items-center gap-1">
+        <label key={`${field.fieldName}-${opt}-${index}`} className="flex items-center gap-1">
           <input
             type="checkbox"
+			style={previewFontStyle}
 			disabled={isSystemField}
             checked={selectedValues.includes(opt)}
             onChange={(e) => {
               setPreviewValues(prev => {
-                const current: string[] = prev[field.id] || [];
+                const current: string[] = prev[field.fieldName] || [];
 
                 if (e.target.checked) {
                   return {
                     ...prev,
-                    [field.id]: [...current, opt]
+                    [field.fieldName]: [...current, opt]
                   };
                 } else {
                   return {
                     ...prev,
-                    [field.id]: current.filter(v => v !== opt)
+                    [field.fieldName]: current.filter(v => v !== opt)
                   };
                 }
               });
             }}
           />
-          <span>{opt}</span>
+          <span style={previewFontStyle}>{opt}</span>
         </label>
       );
     })}
@@ -970,26 +1020,27 @@ const isSystemField = field.dataSource === "system";
 {field.type === "radio_button" && (
   <div
     className={`${
-      field.listOrientation === "horizontal"
+      orientation === "horizontal"
         ? "flex flex-wrap gap-4"
         : "flex flex-col gap-1"
     } text-xs`}
   >
     {(field.options || []).map((opt, index) => (
-      <label key={index} className="flex items-center gap-1">
+      <label key={`${field.fieldName}-${opt}-${index}`} className="flex items-center gap-1">
         <input
           type="radio"
+		  style={previewFontStyle}
 		  disabled={isSystemField}
-          name={field.id} // 🔥 IMPORTANT: ensures single selection
-          checked={previewValues[field.id] === opt}
+          name={field.fieldName} // 🔥 IMPORTANT: ensures single selection
+          checked={previewValues[field.fieldName] === opt}
           onChange={() =>
             setPreviewValues(prev => ({
               ...prev,
-              [field.id]: opt
+              [field.fieldName]: opt
             }))
           }
         />
-        <span>{opt}</span>
+        <span style={previewFontStyle}>{opt}</span>
       </label>
     ))}
   </div>
@@ -999,6 +1050,7 @@ const isSystemField = field.dataSource === "system";
 {field.type === "formula" && (
   <input
     type="text"
+	style={previewFontStyle}
 	disabled={isSystemField}
     value={computeFormula(field)}
     readOnly
@@ -1010,16 +1062,16 @@ const isSystemField = field.dataSource === "system";
 {field.type === "image" && (
   <div className="relative w-full h-full border border-slate-300 bg-white overflow-hidden">
 
-    {previewValues[field.id] ? (
+    {previewValues[field.fieldName] ? (
       <>
         <img
-          src={previewValues[field.id]}
+          src={previewValues[field.fieldName]}
           alt="Uploaded"
           className="w-full h-full object-contain"
         />
 
         <button
-          onClick={() => setImageToDelete(field.id)}
+          onClick={() => setImageToDelete(field.fieldName)}
           className="absolute top-1 right-1 bg-red-600 text-white text-[10px] px-2 py-0.5 rounded"
         >
           ✕
@@ -1040,7 +1092,7 @@ const isSystemField = field.dataSource === "system";
             reader.onload = () => {
               setPreviewValues(prev => ({
                 ...prev,
-                [field.id]: reader.result
+                [field.fieldName]: reader.result
               }));
             };
             reader.readAsDataURL(file);
@@ -1058,6 +1110,7 @@ const isSystemField = field.dataSource === "system";
       fontSize: field.fontSize,
       fontWeight: field.fontWeight,
       fontFamily: field.fontFamily,
+      textAlign: field.textAlign,
       width: "100%",
       height: "100%",
       display: "flex",
@@ -1094,7 +1147,7 @@ const isSystemField = field.dataSource === "system";
   };
 
   const getAutoValue = () => {
-    if (!field.autoNow) return previewValues[field.id] || "";
+    if (!field.autoNow) return previewValues[field.fieldName] || "";
 
     if (field.dateMode === "time") return localISOTime;
     if (field.dateMode === "datetime") return localISODateTime;
@@ -1106,6 +1159,7 @@ return (
   <input
     type={getType()}
     value={getAutoValue()}
+	style={previewFontStyle}
     min={field.minDate || undefined}
     max={
       field.isBirthdate
@@ -1118,7 +1172,7 @@ return (
 
       setPreviewValues(prev => ({
         ...prev,
-        [field.id]: e.target.value
+        [field.fieldName]: e.target.value
       }));
     }}
     className={`w-full outline-none text-slate-700 border border-slate-300 text-xs ${
@@ -1130,7 +1184,7 @@ return (
 
 {/* LABEL */}
 {field.type === "label" && (
-  <span>{field.label}</span>
+  <span style={previewFontStyle}>{field.label}</span>
 )}
     </div>
   );
@@ -1139,7 +1193,7 @@ return (
   // 🟢 BUILDER MODE (FIXED - FULL VERSION)
 return (
   <Rnd
-    key={field.id}
+    key={field.fieldName}
     bounds="parent"
     size={{
       width: pdfDimensions
@@ -1259,7 +1313,7 @@ return (
             ? field.options
             : ["Option 1"]
           ).map((opt, index) => (
-            <option key={index}>{opt}</option>
+            <option key={`${field.fieldName}-${opt}`}>{opt}</option>
           ))}
         </select>
       )}
@@ -1271,17 +1325,23 @@ return (
 {/* LIST (Builder Mode) */}
 {field.type === "list" && (
   <div
-    className={`pointer-events-none text-xs ${
-      field.listOrientation === "horizontal"
-        ? "flex flex-wrap gap-4"
-        : "flex flex-col gap-1"
-    }`}
-  >
+  style={{
+    fontSize: field.fontSize,
+    fontWeight: field.fontWeight,
+    fontFamily: field.fontFamily,
+    textAlign: field.textAlign
+  }}
+  className={`pointer-events-none ${
+    field.listOrientation === "horizontal"
+      ? "flex flex-wrap gap-4"
+      : "flex flex-col gap-1"
+  }`}
+>
     {(field.options && field.options.length > 0
       ? field.options
       : ["Option 1"]
     ).map((opt, index) => (
-      <label key={index} className="flex items-center gap-1">
+      <label key={`${field.fieldName}-${opt}-${index}`} className="flex items-center gap-1">
         <input type="checkbox" disabled />
         <span>{opt}</span>
       </label>
@@ -1300,18 +1360,24 @@ return (
 
 {/* RADIO BUTTON (Builder Mode) */}
 {field.type === "radio_button" && (
-  <div
-    className={`pointer-events-none text-xs ${
-      field.listOrientation === "horizontal"
-        ? "flex flex-wrap gap-4"
-        : "flex flex-col gap-1"
-    }`}
-  >
+<div
+  style={{
+    fontSize: field.fontSize,
+    fontWeight: field.fontWeight,
+    fontFamily: field.fontFamily,
+    textAlign: field.textAlign
+  }}
+  className={`pointer-events-none ${
+    field.listOrientation === "horizontal"
+      ? "flex flex-wrap gap-4"
+      : "flex flex-col gap-1"
+  }`}
+>
     {(field.options && field.options.length > 0
       ? field.options
       : ["Option 1"]
     ).map((opt, index) => (
-      <label key={index} className="flex items-center gap-1">
+      <label key={`${field.fieldName}-${opt}-${index}`} className="flex items-center gap-1">
         <input type="radio" disabled />
         <span>{opt}</span>
       </label>
@@ -1321,12 +1387,18 @@ return (
 
 {/* FORMULA (Builder Mode) */}
 {field.type === "formula" && (
-  <input
-    type="text"
-    disabled
-    placeholder="%Result"
-    className="w-full bg-slate-50 text-xs pointer-events-none"
-  />
+<input
+  type="text"
+  disabled
+  placeholder="%Result"
+  style={{
+    fontSize: field.fontSize,
+    fontWeight: field.fontWeight,
+    fontFamily: field.fontFamily,
+    textAlign: field.textAlign
+  }}
+  className="w-full bg-slate-50 pointer-events-none"
+/>
 )}
 
 {/* IMAGE (Builder Mode) */}
@@ -1336,7 +1408,25 @@ return (
 
 {/* SYSTEM USER (Builder Mode) */}
 {field.type === "system_user" && (
-  <div className="w-full text-xs pointer-events-none">
+  <div
+    style={{
+      fontSize: field.fontSize,
+      fontWeight: field.fontWeight,
+      fontFamily: field.fontFamily,
+      textAlign: field.textAlign,
+      width: "100%",
+      height: "100%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent:
+        field.textAlign === "center"
+          ? "center"
+          : field.textAlign === "right"
+          ? "flex-end"
+          : "flex-start"
+    }}
+    className="pointer-events-none"
+  >
     Current User Name
   </div>
 )}
@@ -1368,7 +1458,7 @@ return (
 </div>
  </div>
 </Document>
-
+)}
   </div>
 </div>
 {/* RIGHT PROPERTIES */}
@@ -1386,7 +1476,10 @@ return (
 
 
       {/* LABEL */}
-    {selectedField.type !== "system_user" && (
+   {(
+  selectedField.type === "input_text" ||
+  selectedField.type === "textarea"
+) && (
   <div>
     <label className="text-[10px] font-black uppercase text-slate-400">
       Label
@@ -1466,12 +1559,16 @@ return (
   </div>
 )}
 
- {/* PLACEHOLDER*/}
-{selectedField.type !== "system_user" && (
+{/* PLACEHOLDER*/}
+{(
+  selectedField.type === "input_text" ||
+  selectedField.type === "textarea"
+) && (
   <div>
     <label className="text-[10px] font-black uppercase text-slate-400">
       Placeholder
     </label>
+
     <input
       type="text"
       value={selectedField.placeholder || ""}
@@ -1521,7 +1618,7 @@ return (
     </label>
 
     {selectedField.options?.map((opt, index) => (
-      <div key={index} className="flex gap-2 mt-1">
+      <div key={`${field.fieldName}-${opt}-${index}`} className="flex gap-2 mt-1">
         <input
           type="text"
           value={opt}
@@ -1604,7 +1701,13 @@ return (
       </select>
     </div>
 
-    <div className="flex items-center gap-2">
+    {!(
+  selectedField.type === "label" ||
+  selectedField.type === "system_user" ||
+  selectedField.type === "radio_button" ||
+  selectedField.type === "formula"
+) && (
+<div className="flex items-center gap-2">
       <input
         type="checkbox"
         checked={selectedField.autoNow || false}
@@ -1616,6 +1719,7 @@ return (
         Auto Current Timestamp
       </span>
     </div>
+	)}
 
     {selectedField.dateMode !== "time" && (
       <>
