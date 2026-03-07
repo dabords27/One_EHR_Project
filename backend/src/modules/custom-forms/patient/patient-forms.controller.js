@@ -167,19 +167,36 @@ exports.getPatientForms = async (req, res) => {
 exports.getFormById = async (req, res) => {
 
   const pool = req.app.locals.pool;
-  const { formId } = req.params;
+  const { id } = req.params;
 
   try {
 
     const result = await pool.request()
-      .input("formId", sql.Int, formId)
+      .input("formId", sql.Int, id)
       .query(`
         SELECT *
         FROM dbo.PatientCustomForms
         WHERE patient_form_id = @formId
       `);
 
-    res.json(result.recordset[0]);
+    const record = result.recordset[0];
+
+    if (!record) {
+      return res.status(404).json({ message: "Form not found" });
+    }
+
+    const filled = record.filled_data
+      ? JSON.parse(record.filled_data)
+      : {};
+
+    res.json({
+      patient: { patient_id: record.patient_id },
+      template: record.template_snapshot
+        ? JSON.parse(record.template_snapshot)
+        : null,
+      filled_data: filled,
+      status: record.status
+    });
 
   } catch (err) {
 
@@ -189,7 +206,6 @@ exports.getFormById = async (req, res) => {
   }
 
 };
-
 
 exports.getPatientRegistry = async (req, res) => {
 

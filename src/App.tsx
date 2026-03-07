@@ -13,6 +13,7 @@ import { CourseInWardModule } from './components/CourseInWardModule';
 import { ClinicalFormSelection } from './components/ClinicalFormSelection';
 import { User, Patient, Department, FormType } from './types';
 import { CustomTemplatePrintView } from "./components/custom-templates/CustomTemplatePrintView";
+import { PatientDocumentsModule } from './components/PatientDocumentsModule';
 
 const App: React.FC = () => {
 
@@ -31,6 +32,7 @@ const App: React.FC = () => {
 const [showCourseInWard, setShowCourseInWard] = useState(true);
 const [isProgressMaximized, setIsProgressMaximized] = useState(false);
 const [printRecordId, setPrintRecordId] = useState<number | null>(null);
+const [showPatientDocuments, setShowPatientDocuments] = useState(true);
 
 /* ================= RESTORE SESSION ================= */
 
@@ -67,6 +69,7 @@ useEffect(() => {
   if (activePatient) {
     setShowProgressNotes(true);
     setShowCourseInWard(true);
+	setShowPatientDocuments(true);
   }
 }, [activePatient]);
 
@@ -281,26 +284,37 @@ if (view === 'select-form' || view === 'create') {
       {/* Floating Clinical Modules (Hidden on Setup) */}
 {activePatient && !['setup', 'dashboard', 'view', 'audit'].includes(currentView) && (
   <>
+  
+    {showPatientDocuments && !isProgressMaximized && (
+      <PatientDocumentsModule
+        patient={activePatient}
+        user={user}
+        forceMinimized={areClinicalModulesMinimized}
+        onClose={() => setShowPatientDocuments(false)}
+      />
+    )}
+
     {showProgressNotes && (
-<ProgressNotesModule
-  key={`progress-${activePatient.case_id}`}
-  patient={activePatient}
-  user={user}
-  forceMinimized={areClinicalModulesMinimized}
-  isMaximizedGlobal={isProgressMaximized}
-  setIsMaximizedGlobal={setIsProgressMaximized}
-  onClose={() => setShowProgressNotes(false)}
-/>
+      <ProgressNotesModule
+        key={`progress-${activePatient.case_id}`}
+        patient={activePatient}
+        user={user}
+        forceMinimized={areClinicalModulesMinimized}
+        isMaximizedGlobal={isProgressMaximized}
+        setIsMaximizedGlobal={setIsProgressMaximized}
+        onClose={() => setShowProgressNotes(false)}
+      />
     )}
 
     {showCourseInWard && !isProgressMaximized && (
       <CourseInWardModule
-  patient={activePatient}
-  user={user}
-  forceMinimized={areClinicalModulesMinimized}
-  onClose={() => setShowCourseInWard(false)}
-/>
+        patient={activePatient}
+        user={user}
+        forceMinimized={areClinicalModulesMinimized}
+        onClose={() => setShowCourseInWard(false)}
+      />
     )}
+
   </>
 )}
 {/* PRINT VIEW */}

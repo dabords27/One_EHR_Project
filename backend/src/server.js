@@ -7,6 +7,9 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true }));
+
+
 
 // ==============================
 // DATABASE + SERVER START
@@ -35,16 +38,17 @@ async function startServer() {
     app.use("/api/notetemplates", require("./modules/notetemplates/notetemplates.routes"));
     app.use("/api/facility", require("./modules/facilityinformation/facilityinformation.routes"));
     app.use("/api/custom-forms", require("./modules/custom-forms/custom-forms.routes"));
-
+	app.use("/api/patient-documents", require("./modules/patient-documents/patient-document.routes"));
     // ==============================
     // 🔥 SERVE UPLOADS (IMPORTANT)
     // ==============================
 
     // This must be BEFORE React fallback
-  app.use(
-  "/uploads",
-  express.static(path.join(__dirname, "../../uploads"))
-);
+const uploadsPath = path.resolve(__dirname, "../../uploads");
+
+app.use("/uploads", express.static(uploadsPath));
+
+console.log("📁 Serving uploads from:", uploadsPath);
    console.log(
   "📁 Serving uploads from:",
   path.join(__dirname, "../../uploads")

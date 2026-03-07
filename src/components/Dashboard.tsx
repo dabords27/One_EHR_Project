@@ -22,21 +22,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate, department, se
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [formsTodayCount, setFormsTodayCount] = useState(0);
+  const [dischargesTodayCount, setDischargesTodayCount] = useState(0);
 
 
   const [statusFilter, setStatusFilter] = useState('Active');
   const [typeFilter, setTypeFilter] = useState('Inpatient');
 
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 7);
-    return d.toISOString().split('T')[0];
-  });
-
-  const [toDate, setToDate] = useState(() =>
-    new Date().toISOString().split('T')[0]
-  );
+const [fromDate, setFromDate] = useState("");
+const [toDate, setToDate] = useState("");
 
 const [sortConfig, setSortConfig] = useState<{
   key: string | null;
@@ -46,61 +39,33 @@ key: "date_admitted",
 direction: "desc"
 });
 
-/* ================= FORMS TODAY ================= */
+/* ================= DISCHARGES TODAY ================= */
 
 useEffect(() => {
 
-if (!user) return;
-
-  const fetchFormsToday = async () => {
+  const fetchDischargesToday = async () => {
 
     try {
 
-      const token = localStorage.getItem("token");
-
-      const res = await fetch(`/api/custom-forms/repository`, {
-        headers: {
-          Authorization: `Bearer ${token}`
-        }
-      });
+      const res = await fetch(`/api/admissions/discharges-today`);
 
       if (!res.ok) return;
 
-const data = await res.json();
+      const data = await res.json();
 
-
-const today = new Date().toLocaleDateString("en-CA", {
-  timeZone: "Asia/Manila"
-});
-
-const count = data.filter((r: any) => {
-
-  if (!r.created_at) return false;
-
-  const recordDate = new Date(r.created_at).toLocaleDateString("en-CA", {
-    timeZone: "Asia/Manila"
-  });
-
-  return (
-    Number(r.created_by) === Number(user.id) &&
-    recordDate === today
-  );
-
-}).length;
-
-setFormsTodayCount(count);
+      setDischargesTodayCount(data.count);
 
     } catch (err) {
 
-      console.error("Forms today error:", err);
+      console.error("Discharges today error:", err);
 
     }
 
   };
 
-  fetchFormsToday();
+  fetchDischargesToday();
 
-}, [user]);
+}, []);
   /* ================= FETCH ADMISSIONS ================= */
 
   const fetchAdmissions = async () => {
@@ -234,50 +199,33 @@ const sortedPatients = React.useMemo(() => {
       {/* Analytics Row */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5">
-          <div className="bg-blue-50 p-4 rounded-xl text-blue-600">
+          <div className="bg-emerald-50 p-4 rounded-xl text-emerald-600">
             <Users size={28} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+            <p className="text-xs font-bold text-emerald-500 uppercase tracking-widest">
               Active Admissions
             </p>
-            <p className="text-3xl font-black text-slate-800">
+            <p className="text-3xl font-black text-emerald-800">
               {activeAdmissionsCount}
             </p>
           </div>
         </div>
 
-       <div
- onClick={() => {
-
-  const today = new Date().toLocaleDateString("en-CA", {
-    timeZone: "Asia/Manila"
-  });
-
-  sessionStorage.setItem(
-    "dashboard_filter",
-    JSON.stringify({
-      created_by: user?.id,
-      fromDate: today,
-      toDate: today
-    })
-  );
-
-  onNavigate("view", null, null);
-
-}}
-  className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5 cursor-pointer hover:bg-slate-50 transition"
+<div
+  className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-5"
 >
-          <div className="bg-emerald-50 p-4 rounded-xl text-emerald-600">
-            <ClipboardCheck size={28} />
+          <div className="bg-gray-50 p-4 rounded-xl text-black-600">
+           <Users size={28} />
           </div>
           <div>
-            <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
-              My Forms Today
-            </p>
-            <p className="text-3xl font-black text-slate-800">
-              {formsTodayCount}
-            </p>
+     <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+  Discharges Today
+</p>
+
+<p className="text-3xl font-black text-slate-800">
+  {dischargesTodayCount}
+</p>
           </div>
         </div>
 

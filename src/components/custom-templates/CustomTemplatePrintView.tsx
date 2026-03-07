@@ -42,8 +42,8 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
           `${API_BASE}/api/custom-forms/patient-form/${recordId}`,
           {
             headers: {
-              Authorization: `Bearer ${token}`
-            }
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
 
@@ -52,9 +52,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
         console.log("PRINT DATA:", data);
 
         setTemplate(data.template_snapshot ?? data.template ?? null);
-
-setPatient(data.patient ?? null);
-
+        setPatient(data.patient ?? null);
         setFilledData(data.filled_data ?? {});
 
       } catch (err) {
@@ -68,7 +66,6 @@ setPatient(data.patient ?? null);
     loadRecord();
 
   }, [recordId]);
-
 
   /* ================= CLOSE AFTER PRINT ================= */
 
@@ -84,7 +81,6 @@ setPatient(data.patient ?? null);
 
   }, [onClose]);
 
-
   /* ================= AUTO PRINT ================= */
 
   useEffect(() => {
@@ -92,59 +88,72 @@ setPatient(data.patient ?? null);
     if (!pdfDimensions) return;
 
     const timer = setTimeout(() => {
-      window.print();
+
+      window.dispatchEvent(new Event("beforeprint"));
+
+      setTimeout(() => {
+
+        window.print();
+
+        setTimeout(() => {
+          window.dispatchEvent(new Event("afterprint"));
+        }, 300);
+
+      }, 120);
+
     }, 400);
 
     return () => clearTimeout(timer);
 
   }, [pdfDimensions]);
 
-
   /* ================= LOADING STATE ================= */
 
   if (!template || !patient) {
-
     return (
       <div className="fixed inset-0 bg-white flex items-center justify-center">
         Preparing print document...
       </div>
     );
-
   }
 
-
   const pdfUrl = `${API_BASE}/uploads/custom-forms/${template.template_id}/template.pdf`;
-
 
   return (
 
     <div id="print-root">
 
-      <div
-        style={{
-          position: "relative",
-          width: 794,
-          height: 1123
-        }}
-      >
+<div
+  style={{
+    position: "relative",
+width: pdfDimensions?.orientation === "landscape" ? "297mm" : "210mm",
+height: pdfDimensions?.orientation === "landscape" ? "210mm" : "297mm",
+    overflow: "hidden"
+  }}
+>
 
         <Document file={pdfUrl}>
 
-     <Page
+<Page
   pageNumber={1}
-  width={780}
+  width={pdfDimensions?.orientation === "landscape" ? 1100 : 780}
+  devicePixelRatio={2}
   renderTextLayer={false}
   renderAnnotationLayer={false}
   onLoadSuccess={(page) => {
+
+    const orientation = page.width > page.height ? "landscape" : "portrait";
+
     setPdfDimensions({
       width: page.width,
-      height: page.height
+      height: page.height,
+      orientation
     });
+
   }}
 />
 
         </Document>
-
 
         {/* FIELD OVERLAY */}
 
@@ -155,15 +164,15 @@ setPatient(data.patient ?? null);
               position: "absolute",
               top: 0,
               left: 0,
-              width: pdfDimensions.width,
-              height: pdfDimensions.height
+              width: "100%",
+              height: "100%"
             }}
           >
 
             <CustomTemplateRenderer
               template={template}
               formData={filledData}
-             systemData={patient}
+              systemData={patient}
               currentPage={1}
               pdfDimensions={pdfDimensions}
               zoom={1}
@@ -177,9 +186,10 @@ setPatient(data.patient ?? null);
 
       </div>
 
-{/* ================= PRINT CSS ================= */}
-<style>
-{`
+      {/* ================= PRINT CSS ================= */}
+
+      <style>{`
+
 .screen-only {
   display: block;
 }
@@ -187,10 +197,11 @@ setPatient(data.patient ?? null);
 .print-only {
   display: none;
 }
+
 @media print {
 
   @page {
-    size: A4 portrait;
+    size: A4 ${pdfDimensions?.orientation || "portrait"};
     margin: 0;
   }
 
@@ -198,19 +209,21 @@ setPatient(data.patient ?? null);
     margin: 0;
     padding: 0;
   }
+canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
 
-  /* Hide everything first */
+
   body * {
     visibility: hidden;
   }
 
-  /* Show only the print container */
   #print-root,
   #print-root * {
     visibility: visible;
   }
 
-  /* Let the PDF control size (prevents 2-page scaling) */
   #print-root {
     position: absolute;
     left: 0;
@@ -218,8 +231,29 @@ setPatient(data.patient ?? null);
     width: 100% !important;
     height: auto !important;
   }
+  
+  #print-root {
+  width: 297mm;
+  height: 210mm;
+}
+  #print-root {
+  page-break-after: avoid;
+  page-break-inside: avoid;
+}
 
-  /* Remove borders from inputs */
+#print-root > div {
+  page-break-inside: avoid;
+}
+
+  input::placeholder,
+  textarea::placeholder {
+    color: transparent !important;
+  }
+
+  label {
+    gap: 6px !important;
+  }
+
   input,
   textarea,
   select {
@@ -239,8 +273,8 @@ setPatient(data.patient ?? null);
   }
 
 }
-`}
-</style>
+
+      `}</style>
 
     </div>
 

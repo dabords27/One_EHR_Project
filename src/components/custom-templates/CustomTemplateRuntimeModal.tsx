@@ -50,7 +50,9 @@ const [systemData, setSystemData] = useState<any>(patient)
 
 const [zoom, setZoom] = useState<number>(2)
 const [currentPage, setCurrentPage] = useState<number>(1)
-const [status, setStatus] = useState<"DRAFT" | "FINALIZED">("DRAFT")
+const [status, setStatus] = useState<"DRAFT" | "FINALIZED">(
+  initialFormData?.__status === "FINALIZED" ? "FINALIZED" : "DRAFT"
+)
 const [pdfError, setPdfError] = useState<string | null>(null)
 
 const pdfRef = useRef<HTMLDivElement | null>(null)
@@ -170,11 +172,15 @@ useEffect(() => {
 ========================= */
 
 useEffect(() => {
+console.log("Runtime initialFormData:", initialFormData);
   if (initialFormData) {
     setFormData(initialFormData)
+
+if (initialFormData.__status === "FINALIZED") {
+  setStatus("FINALIZED")
+}
   }
 }, [initialFormData])
-
 /* =========================
    EDIT MODE
 ========================= */
@@ -184,7 +190,7 @@ useEffect(() => {
     setFormId(editId || null)
     setHasDraft(true)
 
-    if (initialFormData?.status === "FINALIZED") {
+    if (initialFormData?.__status === "FINALIZED") {
       setStatus("FINALIZED")
     }
   }
@@ -446,18 +452,29 @@ const handleFinalize = async () => {
 
 const handlePrint = () => {
 
-  const previousZoom = zoom
+  const previousZoom = zoom;
 
-  // Force correct print size
-  setZoom(1)
+  setZoom(1);
 
+  // 🔥 Force React render BEFORE printing
   setTimeout(() => {
-    window.print()
-    setZoom(previousZoom)
-  }, 200)
 
-}
+    window.dispatchEvent(new Event("beforeprint"));
 
+    setTimeout(() => {
+
+      window.print();
+
+      setTimeout(() => {
+        window.dispatchEvent(new Event("afterprint"));
+        setZoom(previousZoom);
+      }, 300);
+
+    }, 100);
+
+  }, 200);
+
+};
   /* =========================
       RENDER
   ========================= */
@@ -528,10 +545,11 @@ const handlePrint = () => {
           )}
 
 <button
-  onClick={() => {
-    setPendingSave(true);
-    setShowAuthModal(true);
-  }}
+onClick={() => {
+  if (status === "FINALIZED") return
+  setPendingSave(true)
+  setShowAuthModal(true)
+}}
   disabled={status === "FINALIZED"}
   className={`px-3 py-1 rounded flex items-center gap-1 text-white ${
     status === "FINALIZED"
@@ -559,13 +577,7 @@ const handlePrint = () => {
   Finalize
 </button>
 
-          <button
-            onClick={handlePrint}
-            className="px-3 py-1 bg-blue-600 text-white rounded flex items-center gap-1"
-          >
-            <Printer size={14} />
-            Print
-          </button>
+    
 
           <button
             onClick={onClose}
@@ -595,14 +607,20 @@ const handlePrint = () => {
 <Page
   pageNumber={currentPage}
   width={pageWidth * zoom}
+  devicePixelRatio={2}
   renderTextLayer={false}
   renderAnnotationLayer={false}
-  onLoadSuccess={(page) => {
-    setPdfDimensions({
-      width: page.width,
-      height: page.height
-    });
-  }}
+onLoadSuccess={(page) => {
+
+  const orientation = page.width > page.height ? "landscape" : "portrait";
+
+  setPdfDimensions({
+    width: page.width,
+    height: page.height,
+    orientation
+  });
+
+}}
 />
       </Document>
 
@@ -656,10 +674,25 @@ style={{
 
 @media print {
 
-  @page {
-    size: ${template.page_orientation === "landscape" ? "A4 landscape" : "A4 portrait"};
-    margin: 0;
+@page {
+  size: A4 ${pdfDimensions?.orientation || template.page_orientation};
+  margin: 0;
+}
+
+canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+  
+    input::placeholder,
+  textarea::placeholder {
+    color: transparent !important;
   }
+  
+  
+label {
+  gap: 6px !important;
+}
 
   html, body {
     margin: 0;
@@ -691,6 +724,10 @@ style={{
   height: 100% !important;
 }
 
+#print-area {
+  width: ${template.page_orientation === "landscape" ? "297mm" : "210mm"};
+  height: ${template.page_orientation === "landscape" ? "210mm" : "297mm"};
+}
 
   /* Remove borders from inputs */
   input,

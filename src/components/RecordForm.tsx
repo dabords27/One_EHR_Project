@@ -48,6 +48,7 @@ export const RecordForm: React.FC<RecordFormProps> = ({
 const [templateSearch, setTemplateSearch] = useState("");
 const [templateSort, setTemplateSort] = useState<"name" | "date">("name");
   const patient = selectedPatient || loadedPatient;
+  
 
   const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
 
@@ -156,39 +157,41 @@ const filteredTemplates = availableTemplates
           }
         );
 
-        const data = await res.json();
+        if (!res.ok) {
+  const error = await res.text();
+  console.error("SERVER ERROR:", error);
+  return;
+}
+
+const data = await res.json();
 
         if (!data) return;
 
         console.log("EDIT RECORD DATA:", data);
 
         /* Normalize patient */
-    const normalizedPatient: Patient = {
-  mrn: data.patient?.MRN,
-  first_name: data.patient?.Firstname,
-  middle_name: data.patient?.Middlename,
-  last_name: data.patient?.Lastname,
-  patient_type: data.patient?.PatientType,
-  date_admitted: data.patient?.AdmissionDateTime,
-  birthdate: data.patient?.Birthdate,
-  room_no: data.patient?.RoomNo,
-  sex: data.patient?.Sex,
-  case_id: data.patient?.CaseID
-} as Patient;
+const normalizedPatient: Patient = data.patient;
 
         /* Load filled form data */
-        setFormData(data.filled_data || {});
+const filled = data.filled_data || {};
+
+setFormData({
+  ...filled,
+  __status: data.status
+});
 
         /* Set patient FIRST */
         setLoadedPatient(normalizedPatient);
 
         /* THEN load template */
-        if (data.template) {
-          setActiveTemplate({
-            ...data.template,
-            fields: data.template.fields || []
-          });
-        }
+   if (data.template) {
+  setTimeout(() => {
+    setActiveTemplate({
+      ...data.template,
+      fields: data.template.fields || []
+    });
+  }, 0);
+}
 
       } catch (error) {
 
@@ -250,7 +253,13 @@ const filteredTemplates = availableTemplates
      GUARD
   ========================= */
 
-  if (!patient && !editId) return null;
+if (!patient && editId && !activeTemplate) {
+  return (
+    <div className="p-10 text-center text-slate-500">
+      Loading record...
+    </div>
+  );
+}
 
   /* =========================
      RENDER

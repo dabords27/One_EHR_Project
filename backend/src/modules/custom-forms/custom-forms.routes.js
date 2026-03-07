@@ -110,5 +110,5 @@ router.post("/patient-form/finalize", verifyToken, patientFormsController.finali
 
 router.get("/patient-form/patient/:patientId", verifyToken, patientFormsController.getPatientForms);
 
-router.get("/patient-form/:id", verifyToken, controller.getPatientForm);
+router.get("/patient-form/:id", verifyToken, patientFormsController.getFormById);
 module.exports = router;

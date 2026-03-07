@@ -41,14 +41,16 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
     timeZone: "Asia/Manila"
   });
 
-  const [patientStatusFilter, setPatientStatusFilter] = useState("Active");
-  const [typeFilter, setTypeFilter] = useState("Inpatient");
+  /* ===== DEFAULT FILTER FIX ===== */
+
+  const [patientStatusFilter, setPatientStatusFilter] = useState("All");
+  const [typeFilter, setTypeFilter] = useState("All");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const [fromDate, setFromDate] = useState(today);
-  const [toDate, setToDate] = useState(today);
+  const [fromDate, setFromDate] = useState("");
+  const [toDate, setToDate] = useState("");
 
-  const [authorFilter, setAuthorFilter] = useState<number | null>(null); /* ===== FIX ===== */
+  const [authorFilter, setAuthorFilter] = useState<number | null>(null);
 
   const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
 
@@ -81,7 +83,6 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
 
         const parsed = JSON.parse(dashboardFilter);
 
-        /* ===== FIX ===== */
         if (parsed.created_by) {
           setAuthorFilter(parsed.created_by);
         }
@@ -132,33 +133,31 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
       result = result.filter(r => r.status === statusFilter);
     }
 
-    /* ===== FIX ===== */
     if (authorFilter !== null) {
       result = result.filter((r: any) => r.created_by === authorFilter);
     }
 
-    if (fromDate) {
+if (fromDate) {
 
-      const start = new Date(fromDate + "T00:00:00");
+  result = result.filter(r => {
 
-      result = result.filter(r => {
-        const created = new Date(r.created_at);
-        return created >= start;
-      });
+    const recordDate = r.created_at.split(" ")[0]; // YYYY-MM-DD
+    return recordDate >= fromDate;
 
-    }
+  });
 
-    if (toDate) {
+}
 
-      const end = new Date(toDate + "T23:59:59");
+if (toDate) {
 
-      result = result.filter(r => {
-        const created = new Date(r.created_at);
-        return created <= end;
-      });
+  result = result.filter(r => {
 
-    }
+    const recordDate = r.created_at.split(" ")[0]; // YYYY-MM-DD
+    return recordDate <= toDate;
 
+  });
+
+}
     setFilteredRecords(result);
 
   }, [searchTerm, typeFilter, patientStatusFilter, statusFilter, authorFilter, fromDate, toDate, records]);
@@ -190,21 +189,15 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
 
     <div className="space-y-6 animate-in fade-in duration-500">
 
-      {/* HEADER */}
-
       <div>
         <h2 className="text-3xl font-black text-slate-800 uppercase tracking-tight">
           EHR Repository
         </h2>
       </div>
 
-      {/* FILTERS */}
-
       <div className="bg-slate-100/80 p-6 rounded-[32px] border border-slate-200">
 
         <div className="flex flex-wrap items-end gap-3 mb-6">
-
-          {/* SEARCH */}
 
           <div className="flex-1 min-w-[220px]">
 
@@ -231,8 +224,6 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
 
           </div>
 
-          {/* TYPE */}
-
           <div className="w-36">
 
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pl-1">
@@ -252,32 +243,25 @@ export const RecordList: React.FC<RecordListProps> = ({ user, onEdit, onPrint })
 
           </div>
 
-{/* Remaining UI unchanged exactly as your original */}
+          <div className="w-36">
 
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pl-1">
+              Patient Status
+            </label>
 
-{/* PATIENT STATUS */}
+            <select
+              value={patientStatusFilter}
+              onChange={(e) => setPatientStatusFilter(e.target.value)}
+              className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none text-sm font-black text-slate-800"
+            >
 
-<div className="w-36">
+              <option value="Active">Active</option>
+              <option value="Discharge">Discharge</option>
+              <option value="All">All</option>
 
-<label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 pl-1">
-Patient Status
-</label>
+            </select>
 
-<select
-value={patientStatusFilter}
-onChange={(e) => setPatientStatusFilter(e.target.value)}
-className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 shadow-sm appearance-none text-sm font-black text-slate-800"
->
-
-<option value="Active">Active</option>
-<option value="Discharge">Discharge</option>
-<option value="All">All</option>
-
-</select>
-
-</div>
-
-          {/*FORM STATUS */}
+          </div>
 
           <div className="w-36">
 
@@ -296,8 +280,6 @@ className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 outlin
             </select>
 
           </div>
-
-          {/* DATE RANGE */}
 
           <StandardDateInput
             label="From"
@@ -446,14 +428,18 @@ record.patient_status?.toLowerCase() === "active"
   <Printer size={16}/>
 </button>
 
-{record.status === "DRAFT" && (
+
 <button
-onClick={() => onEdit(record.patient_form_id)}
-className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100"
+  onClick={() => onEdit(record.patient_form_id)}
+  className="p-2 rounded-lg border border-slate-200 hover:bg-slate-100"
 >
-<Edit3 size={16}/>
+  {record.status === "FINALIZED" ? (
+    <Eye size={16}/>
+  ) : (
+    <Edit3 size={16}/>
+  )}
 </button>
-)}
+
 
 </div>
 

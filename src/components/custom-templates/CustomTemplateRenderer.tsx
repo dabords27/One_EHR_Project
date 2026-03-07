@@ -24,90 +24,170 @@ export const CustomTemplateRenderer: React.FC<Props> = ({
   readOnly = false
 }) => {
 
+/* =====================================
+   PRINT MODE DETECTOR
+===================================== */
+
+const [isPrint, setIsPrint] = React.useState(false);
+
+React.useEffect(() => {
+
+  const beforePrint = () => setIsPrint(true);
+  const afterPrint = () => setIsPrint(false);
+
+  window.addEventListener("beforeprint", beforePrint);
+  window.addEventListener("afterprint", afterPrint);
+
+  return () => {
+    window.removeEventListener("beforeprint", beforePrint);
+    window.removeEventListener("afterprint", afterPrint);
+  };
+
+}, []);
+
   if (!template) return null;
   if (!template.fields?.length) return null;
   if (!pdfDimensions) return null;
   
+/* =====================================
+   SYSTEM VALUE RESOLVER
+===================================== */
 
+const formatDateTime = (value: any) => {
+  if (!value) return "";
 
-  /* =====================================
-     SYSTEM VALUE RESOLVER
-  ===================================== */
+  const date = new Date(value);
 
-  const resolveSystemValue = (bindingKey: string) => {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  }).format(date);
+};
 
-    if (!bindingKey) return "";
+const formatDate = (value: any) => {
+  if (!value) return "";
 
-    const normalize = (v: string) =>
-      v?.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric"
+  }).format(new Date(value));
+};
 
-    const normalizedSystem = Object.keys(systemData || {}).reduce((acc, key) => {
-      acc[normalize(key)] = systemData[key];
-      return acc;
-    }, {} as Record<string, any>);
+const formatTime = (value: any) => {
+  if (!value) return "";
 
-    const columnKey = bindingKey.split(".").pop();
-    if (!columnKey) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  }).format(new Date(value));
+};
 
-    const normalizedColumn = normalize(columnKey);
+const resolveSystemValue = (bindingKey: string) => {
 
-    if (normalizedSystem[normalizedColumn] !== undefined) {
-      return normalizedSystem[normalizedColumn];
+  if (!bindingKey) return "";
+
+  const normalize = (v: string) =>
+    v?.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+  const normalizedSystem = Object.keys(systemData || {}).reduce((acc, key) => {
+    acc[normalize(key)] = systemData[key];
+    return acc;
+  }, {} as Record<string, any>);
+
+  /* ==============================
+     SPECIAL CALCULATED FIELDS
+  ============================== */
+
+  if (bindingKey === "patient_name") {
+    return `${systemData.last_name || ""} ${systemData.first_name || ""} ${systemData.middle_name || ""}`.trim();
+  }
+
+  if (bindingKey === "age") {
+
+    if (!systemData.birthdate) return "";
+
+    const birth = new Date(systemData.birthdate);
+    const today = new Date();
+
+    const years = today.getFullYear() - birth.getFullYear();
+    const months = today.getMonth() - birth.getMonth();
+    const days = today.getDate() - birth.getDate();
+
+    return `${years}Y ${Math.abs(months)}M ${Math.abs(days)}D`;
+  }
+
+  if (bindingKey === "address") {
+    return [
+      systemData.barangay,
+      systemData.town_city,
+      systemData.province
+    ].filter(Boolean).join(", ");
+  }
+
+  /* ==============================
+     LOOKUP FROM SYSTEM REGISTRY
+  ============================== */
+
+  for (const group of SYSTEM_FIELD_REGISTRY) {
+
+    const found = group.fields.find(f => f.key === bindingKey);
+    if (!found) continue;
+
+    /* Single Column Field */
+    if (found.column) {
+
+      const key = normalize(found.column);
+let value = normalizedSystem[key];
+
+// fallback to binding column name
+if (value === undefined) {
+
+  const fallbackKey = normalize(bindingKey.split(".").pop() || "");
+  value = normalizedSystem[fallbackKey];
+
+}
+
+if (value === undefined || value === null) return "";
+
+if (found.format === "datetime") return formatDateTime(value);
+if (found.format === "date") return formatDate(value);
+if (found.format === "time") return formatTime(value);
+
+return value;
     }
 
-    if (bindingKey === "patient_name") {
-      return `${systemData.last_name || ""} ${systemData.first_name || ""} ${systemData.middle_name || ""}`.trim();
+    /* Multi Column Field (Full Name etc) */
+    if (found.columns) {
+
+      return found.columns
+        .map(col => normalizedSystem[normalize(col)] ?? "")
+        .filter(Boolean)
+        .join(" ");
     }
 
-    if (bindingKey === "age") {
+  }
 
-      if (!systemData.birthdate) return "";
+  /* ==============================
+     DIRECT COLUMN FALLBACK
+  ============================== */
 
-      const birth = new Date(systemData.birthdate);
-      const today = new Date();
+  const columnKey = bindingKey.split(".").pop();
+  if (!columnKey) return "";
 
-      const years = today.getFullYear() - birth.getFullYear();
-      const months = today.getMonth() - birth.getMonth();
-      const days = today.getDate() - birth.getDate();
+  const normalizedColumn = normalize(columnKey);
 
-      return `${years}Y ${Math.abs(months)}M ${Math.abs(days)}D`;
-    }
+  if (normalizedSystem[normalizedColumn] !== undefined) {
+    return normalizedSystem[normalizedColumn];
+  }
 
-    if (bindingKey === "address") {
-      return [
-        systemData.barangay,
-        systemData.town_city,
-        systemData.province
-      ].filter(Boolean).join(", ");
-    }
-
-    for (const group of SYSTEM_FIELD_REGISTRY) {
-
-      const found = group.fields.find(f => f.key === bindingKey);
-
-      if (!found) continue;
-
-      if (found.column) {
-
-        const key = normalize(found.column);
-        return normalizedSystem[key] ?? "";
-
-      }
-
-      if (found.columns) {
-
-        return found.columns
-          .map(col => normalizedSystem[normalize(col)] ?? "")
-          .filter(Boolean)
-          .join(" ");
-
-      }
-
-    }
-
-    return "";
-  };
-
+  return "";
+};
   /* =====================================
      PAGE FILTER
   ===================================== */
@@ -231,75 +311,122 @@ const style = {
 
             {/* INPUT TEXT */}
 
-            {field.type === "input_text" && (
-              <input
-                type="text"
-                value={value}
-                disabled={isDisabled}
-                placeholder={field.placeholder || ""}
-                style={fontStyle}
-                onChange={(e) => {
-                  if (isDisabled) return;
-                  onChange(field.label, e.target.value);
-                }}
-                className={commonInputClass}
-              />
-            )}
+           {field.type === "input_text" && (
+
+  isPrint ? (
+
+    <div style={fontStyle}>
+      {value}
+    </div>
+
+  ) : (
+
+    <input
+      type="text"
+      value={value}
+      disabled={isDisabled}
+      placeholder={field.placeholder || ""}
+      style={fontStyle}
+      onChange={(e) => {
+        if (isDisabled) return;
+        onChange(field.label, e.target.value);
+      }}
+      className={commonInputClass}
+    />
+
+  )
+
+)}
 
             {/* TEXTAREA */}
 
-            {field.type === "textarea" && (
-              <textarea
-                value={value}
-                disabled={isDisabled}
-                placeholder={field.placeholder || ""}
-                style={fontStyle}
-                onChange={(e) => {
-                  if (isDisabled) return;
-                  onChange(field.label, e.target.value);
-                }}
-                className={`${commonInputClass} resize-none`}
-              />
-            )}
+ {field.type === "textarea" && (
+
+  isPrint ? (
+
+    <div style={fontStyle}>
+      {value}
+    </div>
+
+  ) : (
+
+    <textarea
+      value={value}
+      disabled={isDisabled}
+      placeholder={field.placeholder || ""}
+      style={fontStyle}
+      onChange={(e) => {
+        if (isDisabled) return;
+        onChange(field.label, e.target.value);
+      }}
+      className={`${commonInputClass} resize-none`}
+    />
+
+  )
+
+)}
 
             {/* SELECT */}
 
-            {field.type === "select" && (
-              <select
-                value={value}
-                disabled={isDisabled}
-                style={fontStyle}
-                onChange={(e) => {
-                  if (isDisabled) return;
-                 onChange(field.label, e.target.value);
-                }}
-                className={commonInputClass}
-              >
-                <option value="">Select</option>
+{field.type === "select" && (
 
-                {(field.options || []).map((opt: string, idx: number) => (
-				
-                  <option key={`${field.id}-${opt}`} value={opt}>
-                    {opt}
-                  </option>
-                ))}
+  isPrint ? (
 
-              </select>
-            )}
+    <div style={fontStyle}>
+      {value}
+    </div>
+
+  ) : (
+
+    <select
+      value={value}
+      disabled={isDisabled}
+      style={fontStyle}
+      onChange={(e) => {
+        if (isDisabled) return;
+        onChange(field.label, e.target.value);
+      }}
+      className={commonInputClass}
+    >
+      <option value="">Select</option>
+
+      {(field.options || []).map((opt: string, idx: number) => (
+        <option key={`${field.id}-${opt}`} value={opt}>
+          {opt}
+        </option>
+      ))}
+
+    </select>
+
+  )
+
+)}
 
             {/* CHECKBOX */}
 
-            {field.type === "checkbox" && (
-              <input
-                type="checkbox"
-                checked={isSystemField ? Boolean(value) : formData[field.label] || false}
-                disabled={isDisabled}
-                onChange={(e) => {
-                  if (isDisabled) return;
-                 onChange(field.label, e.target.checked);
-                }}
-              />
-            )}
+{field.type === "checkbox" && (
+
+  isPrint ? (
+
+    <div style={fontStyle}>
+      {(formData[field.label] || false) ? "☑" : "☐"}
+    </div>
+
+  ) : (
+
+    <input
+      type="checkbox"
+      checked={isSystemField ? Boolean(value) : formData[field.label] || false}
+      disabled={isDisabled}
+      onChange={(e) => {
+        if (isDisabled) return;
+        onChange(field.label, e.target.checked);
+      }}
+    />
+
+  )
+
+)}
 
             {/* LIST */}
 
@@ -320,34 +447,41 @@ const style = {
                   const selected = formData[field.label] || [];
 
                   return (
-                    <label
-                      key={idx}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 4,
-                        ...fontStyle
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.includes(opt)}
-                        disabled={isDisabled}
-                        onChange={(e) => {
+<label
+  key={idx}
+  style={{
+    display: "flex",
+    alignItems: "center",
+    gap: 4,
+    ...fontStyle
+  }}
+>
 
-                          let updated = [...selected];
+  {isPrint ? (
+    <span>
+      {selected.includes(opt) ? "☑" : "☐"}
+    </span>
+  ) : (
+    <input
+      type="checkbox"
+      checked={selected.includes(opt)}
+      disabled={isDisabled}
+      onChange={(e) => {
 
-                          if (e.target.checked) updated.push(opt);
-                          else updated = updated.filter(v => v !== opt);
+        let updated = [...selected];
 
-                          onChange(field.label, updated);
+        if (e.target.checked) updated.push(opt);
+        else updated = updated.filter(v => v !== opt);
 
-                        }}
-                      />
+        onChange(field.label, updated);
 
-                      {opt}
+      }}
+    />
+  )}
 
-                    </label>
+  {opt}
+
+</label>
                   );
 
                 })}
@@ -370,31 +504,38 @@ const style = {
 >
 
                 {(field.options || []).map((opt: string, idx: number) => (
-                  <label
-                    key={idx}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 4,
-                      ...fontStyle
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name={field.id}
-                      value={opt}
-                      checked={value === opt}
-                      disabled={isDisabled}
-                      onChange={(e) => {
-                        if (isDisabled) return;
-                        onChange(field.label, e.target.value);
-                      }}
-                    />
+  <label
+    key={idx}
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 4,
+      ...fontStyle
+    }}
+  >
 
-                    {opt}
+    {isPrint ? (
+      <span>
+        {value === opt ? "◉" : "○"}
+      </span>
+    ) : (
+      <input
+        type="radio"
+        name={field.id}
+        value={opt}
+        checked={value === opt}
+        disabled={isDisabled}
+        onChange={(e) => {
+          if (isDisabled) return;
+          onChange(field.label, e.target.value);
+        }}
+      />
+    )}
 
-                  </label>
-                ))}
+    {opt}
+
+  </label>
+))}
 
               </div>
             )}
