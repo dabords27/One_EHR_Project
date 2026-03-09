@@ -2,11 +2,9 @@ import { Eye, EyeOff } from "lucide-react";
 import React, { useState } from 'react';
 
 interface AuthModalProps {
-  isOpen: boolean;
-  title: string;
-  message: string;
-  onClose: () => void;
-  onConfirm: () => void;
+  currentUsername: string
+  onVerified: (user: any) => void
+  onClose: () => void
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -20,41 +18,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 const [showPassword, setShowPassword] = useState(false);
-  const handleVerify = async () => {
+const handleVerify = async () => {
 
-    if (!username || !password) {
-      setError('Username and password are required');
+  if (!username || !password) {
+    setError("Username and password are required");
+    return;
+  }
+
+  try {
+
+    setLoading(true);
+    setError("");
+
+    const token = localStorage.getItem("token");
+
+    const res = await fetch(
+      `${import.meta.env.VITE_API_URL}/api/auth/verify`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ username, password })
+      }
+    );
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      setError(data.message || "Invalid credentials");
+      setPassword("");
+      setLoading(false);
       return;
     }
 
-    try {
-      setLoading(true);
-      setError('');
+    setLoading(false);
+    onVerified(data.user);
 
-      const res = await fetch('/api/auth/verify', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.message);
-        setPassword('');
-        setLoading(false);
-        return;
-      }
-
-      setLoading(false);
-      onVerified(data.user);
-
-    } catch (err) {
-      setLoading(false);
-      setError('Authentication failed');
-      setPassword('');
-    }
-  };
+  } catch {
+    setLoading(false);
+    setError("Authentication failed");
+    setPassword("");
+  }
+};
 
 return (
   <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[15000]">

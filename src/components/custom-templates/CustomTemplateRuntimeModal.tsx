@@ -26,6 +26,7 @@ interface Props {
   editId?: number | null
   onClose: () => void
   onSaved: () => void
+
 }
 
 export const CustomTemplateRuntimeModal: React.FC<Props> = ({
@@ -61,6 +62,8 @@ const { user: authUser } = useAuth()
 
 const [showAuthModal, setShowAuthModal] = useState(false)
 const [showFinalizeError, setShowFinalizeError] = useState(false)
+
+const [showValidation, setShowValidation] = useState(false)
 
 const [transactionStatus, setTransactionStatus] =
   useState<TransactionStatus>("idle")
@@ -200,17 +203,31 @@ useEffect(() => {
    FORMAT DATA
 ========================= */
 
-const formattedAdmission = patient?.date_admitted
-  ? new Date(patient.date_admitted).toLocaleString("en-US", {
-      timeZone: "Asia/Manila",
-      month: "short",
-      day: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true
-    })
-  : ""
+const formatDate = (date: any) => {
+
+  if (!date) return ""
+
+  const d = new Date(date)
+
+  const mm = String(d.getMonth() + 1).padStart(2, "0")
+  const dd = String(d.getDate()).padStart(2, "0")
+  const yyyy = d.getFullYear()
+
+  return `${mm}/${dd}/${yyyy}`
+}
+
+const formatTime = (date: any) => {
+
+  if (!date) return ""
+
+  return new Date(date).toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  })
+}
+
+const formattedAdmission = formatDate(patient?.date_admitted)
 
 const patientFullName = `${patient.last_name}, ${patient.first_name} ${patient.middle_name || ""}`
   .replace(/\s+/g, " ")
@@ -242,7 +259,7 @@ const mappedFields = data.map((field: any) => ({
   type: field.field_type,
   page: field.page_number,
 
-  fieldName: field.field_key,   // ⭐ REQUIRED FOR FORMULA
+  fieldName: field.field_key,
 
   xPercent: field.x,
   yPercent: field.y,
@@ -266,7 +283,15 @@ const mappedFields = data.map((field: any) => ({
   listOrientation: field.list_orientation || "vertical",
 
   systemBinding: field.system_binding,
-  dataSource: field.data_source || "manual"
+  dataSource: field.data_source || "manual",
+
+  // ⭐ ADD THESE
+  dateMode: field.date_mode || "date",
+  autoNow: field.auto_now || false,
+  minDate: field.min_date || null,
+  maxDate: field.max_date || null,
+  isBirthdate: field.is_birthdate || false,
+  required: field.is_required || false
 
 }));
    setRuntimeTemplate(prev => ({
@@ -293,82 +318,114 @@ const handleFieldChange = (name: string, value: any) => {
     [name]: value
   }))
 
+  // reset validation highlight when user edits
+  if (showValidation) {
+    setShowValidation(false)
+  }
+
 }
 
 /* =========================
    SAVE DRAFT
 ========================= */
-
 const handleSaveDraft = async () => {
 
-setTransactionStatus("loading")
+  /* =========================
+     REQUIRED FIELD VALIDATION
+  ========================= */
 
-const startTime = Date.now()
+  const requiredFields = runtimeTemplate.fields.filter(
+    (f:any) => f.required
+  );
 
-const token = localStorage.getItem("token")
+  let hasError = false;
 
-const payload = {
+  for (const field of requiredFields) {
 
-patient_form_id: formId, // ⭐ VERY IMPORTANT
-  patient_id: patient.case_id,
-  template_id: template.template_id,
-  department_id: department?.department_id || 1,
+    // skip system fields
+    if (field.dataSource === "system") continue;
 
-  template_snapshot: runtimeTemplate,
-  filled_data: formData
+    const val = formData[field.fieldName];
 
-}
+    if (
+      val === undefined ||
+      val === null ||
+      val === "" ||
+      (Array.isArray(val) && val.length === 0)
+    ) {
+      hasError = true;
+    }
 
-const res = await fetch(
-  `${API_BASE}/api/custom-forms/patient-form/draft`,
-  {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify(payload)
   }
-)
 
-if (!res.ok) {
+  if (hasError) {
+    setShowValidation(true);
+    return;
+  }
 
-  setTransactionStatus("error")
-  alert("Failed to save draft")
-  return
+  /* =========================
+     SAVE DRAFT
+  ========================= */
 
-}
+  setTransactionStatus("loading");
 
-const data = await res.json()
+  const startTime = Date.now();
 
+  const token = localStorage.getItem("token");
 
+  const payload = {
+    patient_form_id: formId,
+    patient_id: patient.case_id,
+    template_id: template.template_id,
+    department_id: department?.department_id || 1,
+    template_snapshot: runtimeTemplate,
+    filled_data: formData
+  };
 
-const elapsed = Date.now() - startTime
-const minTime = 600
+  const res = await fetch(
+    `${API_BASE}/api/custom-forms/patient-form/draft`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify(payload)
+    }
+  );
 
-if (elapsed < minTime) {
-  await new Promise(res => setTimeout(res, minTime - elapsed))
-}
+  if (!res.ok) {
+    setTransactionStatus("error");
+    alert("Failed to save draft");
+    return;
+  }
 
-const newFormId =
-  data.patient_form_id ||
-  data.form_id ||
-  data.id
+  const data = await res.json();
 
-if (newFormId) {
-  setFormId(newFormId)
-  setHasDraft(true)
-}
+  const elapsed = Date.now() - startTime;
+  const minTime = 600;
 
-setTransactionStatus("success")
+  if (elapsed < minTime) {
+    await new Promise(res => setTimeout(res, minTime - elapsed));
+  }
 
-setTimeout(() => {
-  setTransactionStatus("idle")
-}, 1200)
+  const newFormId =
+    data.patient_form_id ||
+    data.form_id ||
+    data.id;
 
+  if (newFormId) {
+    setFormId(newFormId);
+    setHasDraft(true);
+  }
 
+  setTransactionStatus("success");
 
-}
+  setTimeout(() => {
+    setTransactionStatus("idle");
+  }, 1200);
+
+};
 
 /* =========================
    AUTH SUCCESS
@@ -396,10 +453,51 @@ const handleAuthSuccess = async () => {
 
 const handleFinalize = async () => {
 
+  /* =========================
+     REQUIRE DRAFT FIRST
+  ========================= */
+
   if (!formId) {
     setShowFinalizeError(true);
     return;
   }
+
+  /* =========================
+     REQUIRED FIELD VALIDATION
+  ========================= */
+
+  const requiredFields = runtimeTemplate.fields.filter(
+    (f:any) => f.required
+  );
+
+  let hasError = false;
+
+  for (const field of requiredFields) {
+
+    // skip system fields
+    if (field.dataSource === "system") continue;
+
+    const val = formData[field.fieldName];
+
+    if (
+      val === undefined ||
+      val === null ||
+      val === "" ||
+      (Array.isArray(val) && val.length === 0)
+    ) {
+      hasError = true;
+    }
+
+  }
+
+  if (hasError) {
+    setShowValidation(true);
+    return;
+  }
+
+  /* =========================
+     FINALIZE API CALL
+  ========================= */
 
   setTransactionStatus("loading");
 
@@ -446,6 +544,7 @@ const handleFinalize = async () => {
 
 };
 
+
 /* =========================
    PRINT
 ========================= */
@@ -489,7 +588,9 @@ const handlePrint = () => {
         <div className="flex gap-6 items-center">
           <div>Patient: {patientFullName}</div>
           <div>Type: {patient.patient_type}</div>
-          <div>Admission: {formattedAdmission}</div>
+          <div>
+  Admission: {formatDate(patient.date_admitted)} {formatTime(patient.date_admitted)}
+</div>
           <div>Template: {template.template_name}</div>
 
           {status === "FINALIZED" && (
@@ -547,6 +648,35 @@ const handlePrint = () => {
 <button
 onClick={() => {
   if (status === "FINALIZED") return
+
+  const requiredFields = runtimeTemplate.fields.filter(
+    (f:any) => f.required
+  )
+
+  let hasError = false
+
+  for (const field of requiredFields) {
+
+    if (field.dataSource === "system") continue
+
+    const val = formData[field.fieldName]
+
+    if (
+      val === undefined ||
+      val === null ||
+      val === "" ||
+      (Array.isArray(val) && val.length === 0)
+    ) {
+      hasError = true
+    }
+
+  }
+
+  if (hasError) {
+    setShowValidation(true)
+    return
+  }
+
   setPendingSave(true)
   setShowAuthModal(true)
 }}
@@ -562,10 +692,40 @@ onClick={() => {
 </button>
 
 <button
-  onClick={() => {
-    setPendingFinalize(true);
-    setShowAuthModal(true);
-  }}
+onClick={() => {
+
+  const requiredFields = runtimeTemplate.fields.filter(
+    (f:any) => f.required
+  )
+
+  let hasError = false
+
+  for (const field of requiredFields) {
+
+    if (field.dataSource === "system") continue
+
+    const val = formData[field.fieldName]
+
+    if (
+      val === undefined ||
+      val === null ||
+      val === "" ||
+      (Array.isArray(val) && val.length === 0)
+    ) {
+      hasError = true
+    }
+
+  }
+
+  if (hasError) {
+    setShowValidation(true)
+    return
+  }
+
+  setPendingFinalize(true)
+  setShowAuthModal(true)
+
+}}
   disabled={status === "FINALIZED" || !formId}
   className={`px-3 py-1 rounded flex items-center gap-1 ${
     status === "FINALIZED" || !formId
@@ -652,6 +812,7 @@ style={{
   zoom={zoom}
   onChange={handleFieldChange}
   readOnly={status === "FINALIZED"}
+  showValidation={showValidation}
 />
         </div>
       )}
@@ -673,6 +834,10 @@ style={{
 }
 
 @media print {
+
+.print-page {
+  page-break-after: always;
+}
 
 @page {
   size: A4 ${pdfDimensions?.orientation || template.page_orientation};

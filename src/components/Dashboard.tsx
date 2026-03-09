@@ -10,6 +10,8 @@ import {
 import { Patient, Department, OperativeRecord } from '../types';
 import { StandardDateInput } from './StandardDateInput';
 
+const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+
 interface DashboardProps {
   onNavigate: (view: 'dashboard' | 'create' | 'view' | 'setup', id: number | null, patient: Patient | null) => void;
   department: Department;
@@ -47,7 +49,7 @@ useEffect(() => {
 
     try {
 
-      const res = await fetch(`/api/admissions/discharges-today`);
+      const res = await fetch(`${API_BASE}/api/admissions/discharges-today`);
 
       if (!res.ok) return;
 
@@ -80,7 +82,7 @@ useEffect(() => {
         dateTo: toDate
       });
 
-      const response = await fetch(`/api/admissions?${params.toString()}`);
+      const response = await fetch(`${API_BASE}/api/admissions?${params.toString()}`);
       const data = await response.json();
 
 const mapped = data.map((item: any) => ({
@@ -121,7 +123,7 @@ const mapped = data.map((item: any) => ({
 
   const fetchActiveCount = async () => {
     try {
-      const response = await fetch('/api/admissions/active-count');
+     const response = await fetch(`${API_BASE}/api/admissions/active-count`);
       const data = await response.json();
       setActiveAdmissionsCount(data.count);
     } catch (error) {

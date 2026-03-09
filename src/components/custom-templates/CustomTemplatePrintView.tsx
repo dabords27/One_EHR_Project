@@ -27,6 +27,8 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
   const [pdfDimensions, setPdfDimensions] = useState<any>(null);
 
   const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+  
+const mappedPatient = patient || {};
 
   /* ================= LOAD RECORD ================= */
 
@@ -50,6 +52,7 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
         const data = await res.json();
 
         console.log("PRINT DATA:", data);
+		console.log("PATIENT DATA:", data.patient);
 
         setTemplate(data.template_snapshot ?? data.template ?? null);
         setPatient(data.patient ?? null);
@@ -83,66 +86,69 @@ export const CustomTemplatePrintView: React.FC<Props> = ({
 
   /* ================= AUTO PRINT ================= */
 
-  useEffect(() => {
+useEffect(() => {
 
-    if (!pdfDimensions) return;
+if (!pdfDimensions || !template) return;
 
-    const timer = setTimeout(() => {
+  const timer = setTimeout(() => {
+    window.print();
+  }, 600);
 
-      window.dispatchEvent(new Event("beforeprint"));
+  return () => clearTimeout(timer);
 
-      setTimeout(() => {
+}, [pdfDimensions]);
 
-        window.print();
+/* ================= LOADING STATE ================= */
 
-        setTimeout(() => {
-          window.dispatchEvent(new Event("afterprint"));
-        }, 300);
-
-      }, 120);
-
-    }, 400);
-
-    return () => clearTimeout(timer);
-
-  }, [pdfDimensions]);
-
-  /* ================= LOADING STATE ================= */
-
-  if (!template || !patient) {
-    return (
-      <div className="fixed inset-0 bg-white flex items-center justify-center">
-        Preparing print document...
-      </div>
-    );
-  }
-
-  const pdfUrl = `${API_BASE}/uploads/custom-forms/${template.template_id}/template.pdf`;
-
+if (!template || !patient) {
   return (
+    <div className="fixed inset-0 bg-white flex items-center justify-center">
+      Preparing print document...
+    </div>
+  );
+}
 
-    <div id="print-root">
+const pdfUrl = `${API_BASE}/uploads/custom-forms/${template.template_id}/template.pdf`;
 
-<div
-  style={{
-    position: "relative",
-width: pdfDimensions?.orientation === "landscape" ? "297mm" : "210mm",
-height: pdfDimensions?.orientation === "landscape" ? "210mm" : "297mm",
-    overflow: "hidden"
+return (
+
+  <div id="print-root">
+
+    <Document
+  file={pdfUrl}
+  onLoadSuccess={(doc) => {
+    // load first page to get dimensions
   }}
 >
 
-        <Document file={pdfUrl}>
+      {Array.from({ length: template.total_pages || 1 }).map((_, i) => (
+
+   <div
+  key={i}
+  style={{
+    position: "relative",
+width: 794,
+height: 1123,
+overflow: "hidden",
+    pageBreakAfter: "always"
+  }}
+>
 
 <Page
-  pageNumber={1}
-  width={pdfDimensions?.orientation === "landscape" ? 1100 : 780}
+  pageNumber={i + 1}
+  width={794}
+  devicePixelRatio={2}
+  renderTextLayer={false}
+  renderAnnotationLayer={false}
   devicePixelRatio={2}
   renderTextLayer={false}
   renderAnnotationLayer={false}
   onLoadSuccess={(page) => {
 
-    const orientation = page.width > page.height ? "landscape" : "portrait";
+    if (pdfDimensions) return;
+
+    const orientation =
+      page.width > page.height ? "landscape" : "portrait";
 
     setPdfDimensions({
       width: page.width,
@@ -153,42 +159,42 @@ height: pdfDimensions?.orientation === "landscape" ? "210mm" : "297mm",
   }}
 />
 
-        </Document>
+          {pdfDimensions && (
 
-        {/* FIELD OVERLAY */}
+            <div
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+width: 794,
+height: 1123,
+transformOrigin: "top left"
+              }}
+            >
+<CustomTemplateRenderer
+  template={template}
+  formData={filledData}
+  systemData={mappedPatient}
+  currentPage={i + 1}
+  pdfDimensions={pdfDimensions}
+  zoom={1}
+  onChange={() => {}}
+  readOnly
+/>
 
-        {pdfDimensions && (
+            </div>
 
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%"
-            }}
-          >
+          )}
 
-            <CustomTemplateRenderer
-              template={template}
-              formData={filledData}
-              systemData={patient}
-              currentPage={1}
-              pdfDimensions={pdfDimensions}
-              zoom={1}
-              onChange={() => {}}
-              readOnly
-            />
+        </div>
 
-          </div>
+      ))}
 
-        )}
+    </Document>
 
-      </div>
+    {/* ================= PRINT CSS ================= */}
 
-      {/* ================= PRINT CSS ================= */}
-
-      <style>{`
+    <style>{`
 
 .screen-only {
   display: block;
@@ -209,11 +215,14 @@ height: pdfDimensions?.orientation === "landscape" ? "210mm" : "297mm",
     margin: 0;
     padding: 0;
   }
-canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
 
+#print-root {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: ${pdfDimensions?.orientation === "landscape" ? "297mm" : "210mm"};
+  height: ${pdfDimensions?.orientation === "landscape" ? "210mm" : "297mm"};
+}
 
   body * {
     visibility: hidden;
@@ -231,53 +240,45 @@ canvas {
     width: 100% !important;
     height: auto !important;
   }
-  
-  #print-root {
-  width: 297mm;
-  height: 210mm;
-}
-  #print-root {
-  page-break-after: avoid;
-  page-break-inside: avoid;
-}
 
-#print-root > div {
-  page-break-inside: avoid;
+
+
+input,
+textarea,
+select {
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+  pointer-events: none !important;
 }
 
-  input::placeholder,
-  textarea::placeholder {
-    color: transparent !important;
-  }
+/* PRINT CHECKBOX STYLE */
+input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border: none !important;
+  background: transparent !important;
+  position: relative;
+}
 
-  label {
-    gap: 6px !important;
-  }
-
-  input,
-  textarea,
-  select {
-    border: none !important;
-    outline: none !important;
-    background: transparent !important;
-    box-shadow: none !important;
-    appearance: none !important;
-    -webkit-appearance: none !important;
-    -moz-appearance: none !important;
-    pointer-events: none !important;
-    padding: 0 !important;
-  }
-
-  select::-ms-expand {
-    display: none;
-  }
+/* show check mark only */
+input[type="checkbox"]:checked::after {
+  content: "✓";
+  position: absolute;
+  top: -3px;
+  left: 0px;
+  font-size: 16px;
+  font-weight: bold;
+  color: black;
+}
 
 }
 
-      `}</style>
+    `}</style>
 
-    </div>
+</div>
 
-  );
-
+);
 };

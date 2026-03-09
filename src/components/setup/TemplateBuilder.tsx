@@ -76,6 +76,26 @@ const [txMsg, setTxMsg] = useState("");
     .replace(/\s+/g, "_");
 };
 
+const generateUniqueLabel = (type: string) => {
+
+  const baseLabel =
+    FIELD_TYPES.find(f => f.type === type)?.label || type;
+
+  const existing = fields
+    .filter(f => f.page === currentPage) // only check current page
+    .filter(f => f.label.startsWith(baseLabel))
+    .map(f => {
+      const match = f.label.match(/\d+$/);
+      return match ? Number(match[0]) : 0;
+    });
+
+  const nextNumber = existing.length
+    ? Math.max(...existing) + 1
+    : 1;
+
+  return `${baseLabel} ${nextNumber}`;
+};
+
 const loadFields = async () => {
   try {
     const token = localStorage.getItem("token");
@@ -156,7 +176,10 @@ const [scale, setScale] = useState<number>(2);
 const [selectedField, setSelectedField] = useState<TemplateField | null>(null);
 const [fields, setFields] = useState<TemplateField[]>([]);
 const hasDuplicateLabels = () => {
-  const labels = fields.map(f => f.label.trim().toLowerCase());
+  const labels = fields
+    .filter(f => f.page === currentPage)
+    .map(f => f.label.trim().toLowerCase());
+
   return new Set(labels).size !== labels.length;
 };
 const [labelError, setLabelError] = useState<string | null>(null);
@@ -167,7 +190,14 @@ const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 const [imageToDelete, setImageToDelete] = useState<string | null>(null);
 const [isPreviewMode, setIsPreviewMode] = useState(false);
 const [previewValues, setPreviewValues] = useState<Record<string, any>>({});
-const API_BASE = `${window.location.protocol}//${window.location.hostname}:5000`;
+const API_BASE = useMemo(() => {
+  return `${window.location.protocol}//${window.location.hostname}:5000`;
+}, []);
+const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+
+const [autosaveStatus, setAutosaveStatus] = useState<
+  "idle" | "saving" | "saved"
+>("idle");
 
 useEffect(() => {
   const checkPdf = async () => {
@@ -187,10 +217,9 @@ useEffect(() => {
 }, [templateId]);
 
 
-
 const pdfFileSource = useMemo(() => ({
-  url: `${API_BASE}/uploads/custom-forms/${templateId}/template.pdf?t=${Date.now()}`
-}), [templateId]);
+  url: `${API_BASE}/uploads/custom-forms/${templateId}/template.pdf`
+}), [templateId, API_BASE]);
 const [pdfDimensions, setPdfDimensions] = useState<{
   width: number;
   height: number;
@@ -216,7 +245,7 @@ const addField = (type: string) => {
     heightPercent: 0.03,
 
     fieldName: `${baseName}_${uniqueId}`,
-    label: `${type} field`,
+    label: generateUniqueLabel(type),
     placeholder: "",
 
     options:
@@ -249,8 +278,9 @@ const addField = (type: string) => {
   };
 
   setFields(prev => [...prev, newField]);
+  setHasUnsavedChanges(true);
 };
-const saveFields = async (verifiedUser: any) => {
+const saveFields = async (verifiedUser: any, isAutoSave = false) => {
   // 🚫 BLOCK IF DUPLICATE LABEL EXISTS
  if (hasDuplicateLabels()) {
     setTxStatus("error");
@@ -261,10 +291,13 @@ const saveFields = async (verifiedUser: any) => {
   try {
     setIsSaving(true);
 
-    setTxKey(prev => prev + 1);
-    setTxStatus("loading");
-    setTxMsg("Syncing fields...");
-
+if (!isAutoSave) {
+  setTxKey(prev => prev + 1);
+  setTxStatus("loading");
+  setTxMsg("Syncing fields...");
+} else {
+  setAutosaveStatus("saving");
+}
     const startTime = Date.now();
 
     const token = localStorage.getItem("token");
@@ -300,8 +333,17 @@ const saveFields = async (verifiedUser: any) => {
       await new Promise(res => setTimeout(res, minTime - elapsed));
     }
 
-    setTxStatus("success");
-    setTxMsg("Fields synced successfully.");
+if (!isAutoSave) {
+  setTxStatus("success");
+  setTxMsg("Fields synced successfully.");
+} else {
+  setAutosaveStatus("saved");
+
+  setTimeout(() => {
+    setAutosaveStatus("idle");
+  }, 2000);
+}
+	setHasUnsavedChanges(false); // autosave reset
 
     setTimeout(() => setTxStatus("idle"), 1500);
 
@@ -328,12 +370,15 @@ const FIELD_TYPES = [
 ];
 
 const isDuplicateLabel = (label: string, currentId?: string) => {
+
   const normalized = label.trim().toLowerCase();
 
   return fields.some(f =>
+    f.page === currentPage &&
     f.id !== currentId &&
     f.label.trim().toLowerCase() === normalized
   );
+
 };
 
 const updateSelectedField = (updates: any) => {
@@ -382,6 +427,7 @@ const updateSelectedField = (updates: any) => {
 
     return updated;
   });
+  setHasUnsavedChanges(true);
 };
 const computeFormula = (field: TemplateField) => {
   if (!field.formulaExpression?.trim()) return "";
@@ -535,6 +581,70 @@ if (
   return () => window.removeEventListener("keydown", handleKeyDown);
 }, [selectedField, pdfDimensions, isPreviewMode]);
 
+/* =========================
+   AUTOSAVE (DEBOUNCED)
+========================= */
+
+useEffect(() => {
+
+if (!hasUnsavedChanges) return;
+if (!user) return;
+if (isPreviewMode) return;
+if (isSaving) return;
+  const timer = setTimeout(() => {
+
+    console.log("Autosaving template fields...");
+    saveFields(user, true);
+
+  }, 10000);
+
+  return () => clearTimeout(timer);
+
+}, [fields, hasUnsavedChanges, user, isPreviewMode, isSaving]);
+
+/* =========================
+   WARN BEFORE LEAVING PAGE
+========================= */
+
+useEffect(() => {
+
+  const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+
+    if (!hasUnsavedChanges) return;
+
+    e.preventDefault();
+    e.returnValue = "";
+
+  };
+
+  window.addEventListener("beforeunload", handleBeforeUnload);
+
+  return () =>
+    window.removeEventListener("beforeunload", handleBeforeUnload);
+
+}, [hasUnsavedChanges]);
+
+/* =========================
+   PREVENT  BEFORE LEAVING PAGE
+========================= */
+
+const handlePageChange = (newPage: number) => {
+
+  if (hasUnsavedChanges) {
+
+    const confirmLeave = window.confirm(
+      "You have unsaved changes on this page. Continue without saving?"
+    );
+
+    if (!confirmLeave) return;
+
+  }
+
+ setCurrentPage(newPage);
+setSelectedField(null);
+
+};
+
   return (
     <div className="fixed inset-0 z-[9999] flex flex-col bg-slate-100">
 
@@ -608,6 +718,11 @@ const response = await fetch(
 
 
   <div className="flex items-center gap-6 min-w-[300px] justify-end">
+  {/* AUTOSAVE STATUS */}
+<div className="text-xs font-semibold text-slate-500 w-[120px] text-right">
+  {autosaveStatus === "saving" && "Saving..."}
+  {autosaveStatus === "saved" && "All changes saved"}
+</div>
 
     {/* ZOOM */}
     <div className="flex items-center gap-2">
@@ -636,11 +751,24 @@ const response = await fetch(
     <div className="flex items-center gap-2">
       <button
         disabled={currentPage <= 1}
-        onClick={() => setCurrentPage((prev) => prev - 1)}
+        onClick={() => handlePageChange(currentPage - 1)}
         className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold disabled:opacity-40"
       >
         Prev
       </button>
+	  
+	    {/* AUTOSAVE STATUS */}
+  <div className="text-xs font-semibold text-slate-500 w-[140px] text-right">
+
+    {autosaveStatus === "saving" && (
+      <span>Saving...</span>
+    )}
+
+    {autosaveStatus === "saved" && (
+      <span className="text-emerald-600">✓ Saved</span>
+    )}
+
+  </div>
 
       <span className="text-xs font-bold">
         Page {currentPage} / {numPages || 1}
@@ -648,7 +776,7 @@ const response = await fetch(
 
       <button
         disabled={currentPage >= numPages}
-        onClick={() => setCurrentPage((prev) => prev + 1)}
+        onClick={() => handlePageChange(currentPage + 1)}
         className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold disabled:opacity-40"
       >
         Next
@@ -780,11 +908,7 @@ className={`px-4 py-2 text-xs font-bold rounded-lg ${
   .filter(f => f.page === currentPage)
   .map(field => {
 
-const orientation =
-  field.listOrientation ||
-  field.list_orientation ||
-  field.orientation ||
-  "vertical";
+const orientation = field.listOrientation || "vertical";
 
 if (isPreviewMode) {
 const isSystemField = field.dataSource === "system";
@@ -798,7 +922,7 @@ const previewFontStyle = {
 
   return (
     <div
-      key={field.fieldName}
+      key={field.id}
       style={{
         position: "absolute",
         width: pdfDimensions
@@ -1131,14 +1255,11 @@ const previewFontStyle = {
 {field.type === "date" && (() => {
 
   const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
 
-  // ✅ Convert UTC → Local (Philippines UTC+8)
-  const localISODateTime = new Date(
-    now.getTime() - now.getTimezoneOffset() * 60000
-  ).toISOString().slice(0, 16);
-
-  const localISODate = localISODateTime.split("T")[0];
-  const localISOTime = localISODateTime.split("T")[1];
+  const localISODate = local.toISOString().slice(0,10);
+  const localISOTime = local.toISOString().slice(11,16);
+  const localISODateTime = local.toISOString().slice(0,16);
 
   const getType = () => {
     if (field.dateMode === "time") return "time";
@@ -1147,44 +1268,57 @@ const previewFontStyle = {
   };
 
   const getAutoValue = () => {
-    if (!field.autoNow) return previewValues[field.fieldName] || "";
+
+    if (!field.autoNow) {
+      return previewValues[field.fieldName] || "";
+    }
 
     if (field.dateMode === "time") return localISOTime;
     if (field.dateMode === "datetime") return localISODateTime;
     return localISODate;
   };
-  
-  
-return (
-  <input
-    type={getType()}
-    value={getAutoValue()}
-	style={previewFontStyle}
-    min={field.minDate || undefined}
-    max={
-      field.isBirthdate
-        ? localISODate
-        : field.maxDate || undefined
-    }
-    disabled={isSystemField}
-    onChange={(e) => {
-      if (isSystemField) return;
 
-      setPreviewValues(prev => ({
-        ...prev,
-        [field.fieldName]: e.target.value
-      }));
-    }}
-    className={`w-full outline-none text-slate-700 border border-slate-300 text-xs ${
-      isSystemField ? "bg-slate-100 cursor-not-allowed" : ""
-    }`}
-  />
-);
+  return (
+    <input
+      type={getType()}
+      value={getAutoValue()}
+      required={field.required}
+      style={previewFontStyle}
+      disabled={isSystemField}
+      min={field.dateMode !== "time" ? field.minDate || undefined : undefined}
+      max={
+        field.dateMode !== "time"
+          ? field.isBirthdate
+            ? localISODate
+            : field.maxDate || undefined
+          : undefined
+      }
+      onChange={(e) => {
+
+        if (isSystemField) return;
+
+        setPreviewValues(prev => ({
+          ...prev,
+          [field.fieldName]: e.target.value
+        }));
+
+      }}
+      className={`w-full outline-none text-slate-700 border border-slate-300 text-xs ${
+        isSystemField ? "bg-slate-100 cursor-not-allowed" : ""
+      }`}
+    />
+  );
+
 })()}
 
 {/* LABEL */}
 {field.type === "label" && (
-  <span style={previewFontStyle}>{field.label}</span>
+  <span style={previewFontStyle}>
+    {field.label}
+    {field.required && (
+      <span style={{ color: "red" }}> *</span>
+    )}
+  </span>
 )}
     </div>
   );
@@ -1193,7 +1327,7 @@ return (
   // 🟢 BUILDER MODE (FIXED - FULL VERSION)
 return (
   <Rnd
-    key={field.fieldName}
+    key={field.id}
     bounds="parent"
     size={{
       width: pdfDimensions
@@ -1224,6 +1358,7 @@ return (
             : f
         )
       );
+	  setHasUnsavedChanges(true);
     }}
     onResizeStop={(e, direction, ref, delta, position) => {
       if (!pdfDimensions) return;
@@ -1253,6 +1388,7 @@ return (
             : f
         )
       );
+	  setHasUnsavedChanges(true);
     }}
     onClick={() => {
       if (!isPreviewMode) {
@@ -1341,7 +1477,7 @@ return (
       ? field.options
       : ["Option 1"]
     ).map((opt, index) => (
-      <label key={`${field.fieldName}-${opt}-${index}`} className="flex items-center gap-1">
+      <label key={`${field.id}-${opt}-${index}`} className="flex items-center gap-1">
         <input type="checkbox" disabled />
         <span>{opt}</span>
       </label>
@@ -1377,7 +1513,7 @@ return (
       ? field.options
       : ["Option 1"]
     ).map((opt, index) => (
-      <label key={`${field.fieldName}-${opt}-${index}`} className="flex items-center gap-1">
+      <label key={`${field.id}-${opt}-${index}`} className="flex items-center gap-1">
         <input type="radio" disabled />
         <span>{opt}</span>
       </label>
@@ -1476,28 +1612,24 @@ return (
 
 
       {/* LABEL */}
-   {(
-  selectedField.type === "input_text" ||
-  selectedField.type === "textarea"
-) && (
-  <div>
-    <label className="text-[10px] font-black uppercase text-slate-400">
-      Label
-    </label>
-    <input
-      type="text"
-      value={selectedField.label}
-      onChange={(e) =>
-        updateSelectedField({ label: e.target.value })
-      }
-      className={`w-full mt-1 border rounded-lg px-3 py-1.5 text-xs font-semibold ${
-  labelError
-    ? "border-red-500 focus:ring-2 focus:ring-red-400"
-    : "border-slate-300"
-}`}
-    />
-  </div>
-)}
+<div>
+  <label className="text-[10px] font-black uppercase text-slate-400">
+    Label
+  </label>
+
+  <input
+    type="text"
+    value={selectedField.label}
+    onChange={(e) =>
+      updateSelectedField({ label: e.target.value })
+    }
+    className={`w-full mt-1 border rounded-lg px-3 py-1.5 text-xs font-semibold ${
+      labelError
+        ? "border-red-500 focus:ring-2 focus:ring-red-400"
+        : "border-slate-300"
+    }`}
+  />
+</div>
 {labelError && (
   <div className="text-[10px] text-red-600 font-bold mt-1">
     {labelError}
@@ -1618,7 +1750,7 @@ return (
     </label>
 
     {selectedField.options?.map((opt, index) => (
-      <div key={`${field.fieldName}-${opt}-${index}`} className="flex gap-2 mt-1">
+      <div key={`${selectedField.fieldName}-${opt}-${index}`} className="flex gap-2 mt-1">
         <input
           type="text"
           value={opt}
@@ -1962,13 +2094,14 @@ return (
         </button>
 
         <button
-      onClick={() => {
+onClick={() => {
   setFields(prev =>
     prev.filter(f => f.id !== selectedField.id)
   );
   setSelectedField(null);
   setLabelError(null);
   setShowDeleteConfirm(false);
+  setHasUnsavedChanges(true);
 }}
           className="px-4 py-1.5 text-xs font-bold bg-red-600 text-white rounded-lg"
         >

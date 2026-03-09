@@ -48,7 +48,6 @@ const uploadsPath = path.resolve(__dirname, "../../uploads");
 
 app.use("/uploads", express.static(uploadsPath));
 
-console.log("📁 Serving uploads from:", uploadsPath);
    console.log(
   "📁 Serving uploads from:",
   path.join(__dirname, "../../uploads")

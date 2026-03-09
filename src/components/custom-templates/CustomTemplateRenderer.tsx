@@ -11,6 +11,7 @@ interface Props {
   zoom: number;
   onChange: (name: string, value: any) => void;
   readOnly?: boolean;
+  showValidation?: boolean;
 }
 
 export const CustomTemplateRenderer: React.FC<Props> = ({
@@ -21,7 +22,8 @@ export const CustomTemplateRenderer: React.FC<Props> = ({
   pdfDimensions,
   zoom,
   onChange,
-  readOnly = false
+  readOnly = false,
+  showValidation = false
 }) => {
 
 /* =====================================
@@ -69,15 +71,17 @@ const formatDateTime = (value: any) => {
 };
 
 const formatDate = (value: any) => {
+
   if (!value) return "";
 
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "2-digit",
-    year: "numeric"
-  }).format(new Date(value));
-};
+  const d = new Date(value);
 
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const yyyy = d.getFullYear();
+
+  return `${mm}/${dd}/${yyyy}`;
+};
 const formatTime = (value: any) => {
   if (!value) return "";
 
@@ -104,9 +108,28 @@ const resolveSystemValue = (bindingKey: string) => {
      SPECIAL CALCULATED FIELDS
   ============================== */
 
-  if (bindingKey === "patient_name") {
-    return `${systemData.last_name || ""} ${systemData.first_name || ""} ${systemData.middle_name || ""}`.trim();
-  }
+if (bindingKey === "patient_name") {
+
+  const last =
+    systemData.last_name ||
+    systemData.lastname ||
+    systemData.lastName ||
+    "";
+
+  const first =
+    systemData.first_name ||
+    systemData.firstname ||
+    systemData.firstName ||
+    "";
+
+  const middle =
+    systemData.middle_name ||
+    systemData.middlename ||
+    systemData.middleName ||
+    "";
+
+  return [last, first, middle].filter(Boolean).join(", ");
+}
 
   if (bindingKey === "age") {
 
@@ -269,7 +292,13 @@ template.fields.forEach((field: any) => {
 
 const value = isSystemField
   ? resolveSystemValue(field.systemBinding)
-  : formData[field.label] ?? "";
+  : formData[field.fieldName] ?? "";
+  
+    const showError =
+    showValidation &&
+    field.required &&
+    !value &&
+    !isSystemField;
 
         const orientation =
           field.listOrientation ||
@@ -295,19 +324,23 @@ const value = isSystemField
 
 const style = {
   position: "absolute",
-  width: field.widthPercent * pdfDimensions.width,
+  width: (field.widthPercent || 0) * (pdfDimensions?.width || 0),
   height:
     field.type === "radio_button" || field.type === "list"
       ? "auto"
-      : field.heightPercent * pdfDimensions.height,
-  left: field.xPercent * pdfDimensions.width,
-  top: field.yPercent * pdfDimensions.height
+      : (field.heightPercent || 0) * (pdfDimensions?.height || 0),
+  left: (field.xPercent || 0) * (pdfDimensions?.width || 0),
+  top: (field.yPercent || 0) * (pdfDimensions?.height || 0)
 };
         const commonInputClass =
           "w-full h-full border border-slate-300 bg-white outline-none text-slate-700";
 
         return (
-          <div key={field.id} style={style}>
+          <div
+  key={field.id}
+  style={style}
+  className={showError ? "outline outline-2 outline-red-500 rounded-sm" : ""}
+>
 
             {/* INPUT TEXT */}
 
@@ -329,9 +362,11 @@ const style = {
       style={fontStyle}
       onChange={(e) => {
         if (isDisabled) return;
-        onChange(field.label, e.target.value);
+        onChange(field.fieldName, e.target.value);
       }}
-      className={commonInputClass}
+      className={`${commonInputClass} ${
+  showError ? "border-red-500" : ""
+}`}
     />
 
   )
@@ -357,14 +392,85 @@ const style = {
       style={fontStyle}
       onChange={(e) => {
         if (isDisabled) return;
-        onChange(field.label, e.target.value);
+        onChange(field.fieldName, e.target.value);
       }}
-      className={`${commonInputClass} resize-none`}
+      className={`${commonInputClass} resize-none ${
+showError ? "border-red-500" : ""
+}`}
     />
 
   )
 
 )}
+
+{/* DATE / TIME */}
+{field.type === "date" && (() => {
+
+  const getType = () => {
+    if (field.dateMode === "time") return "time";
+    if (field.dateMode === "datetime") return "datetime-local";
+    return "date";
+  };
+
+  const now = new Date();
+  const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+
+  const localISODate = local.toISOString().slice(0,10);
+  const localISOTime = local.toISOString().slice(11,16);
+  const localISODateTime = local.toISOString().slice(0,16);
+
+ const autoValue = (() => {
+
+  if (!field.autoNow) return value;
+
+  if (field.dateMode === "time") return localISOTime;
+  if (field.dateMode === "datetime") return localISODateTime;
+  return localISODate;
+
+})();
+
+  return isPrint ? (
+
+<div style={fontStyle}>
+{
+  autoValue
+    ? field.dateMode === "time"
+      ? formatTime(autoValue)
+      : field.dateMode === "datetime"
+      ? formatDateTime(autoValue)
+      : formatDate(autoValue)
+    : ""
+}
+</div>
+
+  ) : (
+
+    <input
+      type={getType()}
+      value={autoValue}
+      required={field.required}
+      min={field.dateMode !== "time" ? field.minDate || undefined : undefined}
+      max={
+        field.dateMode !== "time"
+          ? field.isBirthdate
+            ? localISODate
+            : field.maxDate || undefined
+          : undefined
+      }
+      disabled={isDisabled}
+      style={fontStyle}
+      onChange={(e)=>{
+        if (isDisabled) return;
+        onChange(field.fieldName, e.target.value);
+      }}
+      className={`${commonInputClass} ${
+showError ? "border-red-500" : ""
+}`}
+    />
+
+  );
+
+})()}
 
             {/* SELECT */}
 
@@ -384,9 +490,11 @@ const style = {
       style={fontStyle}
       onChange={(e) => {
         if (isDisabled) return;
-        onChange(field.label, e.target.value);
+        onChange(field.fieldName, e.target.value);
       }}
-      className={commonInputClass}
+      className={`${commonInputClass} ${
+showError ? "border-red-500" : ""
+}`}
     >
       <option value="">Select</option>
 
@@ -409,18 +517,18 @@ const style = {
   isPrint ? (
 
     <div style={fontStyle}>
-      {(formData[field.label] || false) ? "☑" : "☐"}
+      {(formData[field.fieldName] || false) ? "☑" : "☐"}
     </div>
 
   ) : (
 
     <input
       type="checkbox"
-      checked={isSystemField ? Boolean(value) : formData[field.label] || false}
+      checked={isSystemField ? Boolean(value) : formData[field.fieldName] || false}
       disabled={isDisabled}
       onChange={(e) => {
         if (isDisabled) return;
-        onChange(field.label, e.target.checked);
+        onChange(field.fieldName, e.target.checked);
       }}
     />
 
@@ -444,7 +552,7 @@ const style = {
 
                 {(field.options || []).map((opt: string, idx: number) => {
 
-                  const selected = formData[field.label] || [];
+                  const selected = formData[field.fieldName] || [];
 
                   return (
 <label
@@ -473,7 +581,7 @@ const style = {
         if (e.target.checked) updated.push(opt);
         else updated = updated.filter(v => v !== opt);
 
-        onChange(field.label, updated);
+        onChange(field.fieldName, updated);
 
       }}
     />
@@ -527,7 +635,7 @@ const style = {
         disabled={isDisabled}
         onChange={(e) => {
           if (isDisabled) return;
-          onChange(field.label, e.target.value);
+          onChange(field.fieldName, e.target.value);
         }}
       />
     )}
@@ -571,7 +679,12 @@ key={JSON.stringify(formData)}
                       : "flex-start"
                 }}
               >
-                {field.label}
+                <>
+  {field.fieldName}
+  {field.required && (
+    <span style={{ color: "red", marginLeft: 2 }}>*</span>
+  )}
+</>
               </div>
             )}
 

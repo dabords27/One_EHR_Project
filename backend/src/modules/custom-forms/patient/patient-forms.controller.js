@@ -173,12 +173,15 @@ exports.getFormById = async (req, res) => {
 
     const result = await pool.request()
       .input("formId", sql.Int, id)
-      .query(`
-        SELECT *
-        FROM dbo.PatientCustomForms
-        WHERE patient_form_id = @formId
-      `);
-
+ .query(`
+  SELECT 
+    f.*,
+    p.*
+  FROM dbo.PatientCustomForms f
+  LEFT JOIN dbo.PatientRegistry_Local p
+    ON f.patient_id = p.RegistryTrackingNo
+  WHERE f.patient_form_id = @formId
+`);
     const record = result.recordset[0];
 
     if (!record) {
@@ -189,14 +192,21 @@ exports.getFormById = async (req, res) => {
       ? JSON.parse(record.filled_data)
       : {};
 
-    res.json({
-      patient: { patient_id: record.patient_id },
-      template: record.template_snapshot
-        ? JSON.parse(record.template_snapshot)
-        : null,
-      filled_data: filled,
-      status: record.status
-    });
+const patient = { ...record };
+
+delete patient.template_snapshot;
+delete patient.filled_data;
+delete patient.status;
+delete patient.patient_form_id;
+
+res.json({
+  patient,
+  template: record.template_snapshot
+    ? JSON.parse(record.template_snapshot)
+    : null,
+  filled_data: filled,
+  status: record.status
+});
 
   } catch (err) {
 

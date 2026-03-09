@@ -91,7 +91,25 @@ const getActiveInpatientCount = async (pool) => {
   return result.recordset[0].ActiveCount;
 };
 
+
+/* ================= DISCHARGES TODAY COUNT ================= */
+
+const getDischargesToday = async (pool) => {
+
+  const result = await pool.request().query(`
+    SELECT COUNT(1) AS DischargesToday
+    FROM PatientRegistry_Local
+    WHERE
+        DischargeDateTime IS NOT NULL
+        AND CAST(DischargeDateTime AS DATE) = CAST(GETDATE() AS DATE)
+        AND (Status IS NULL OR Status <> 'X')
+  `);
+
+  return result.recordset[0].DischargesToday;
+};
+
 module.exports = {
   getAdmissions,
-  getActiveInpatientCount
+  getActiveInpatientCount,
+  getDischargesToday
 };
