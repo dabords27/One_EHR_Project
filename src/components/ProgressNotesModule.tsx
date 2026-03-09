@@ -81,12 +81,7 @@ const userType = (user.role || "").toUpperCase();
 // Date filter
 const today = new Date().toISOString().split("T")[0];
 
-const [startDate, setStartDate] = useState(
-  patient.date_admitted
-    ? new Date(patient.date_admitted).toISOString().split("T")[0]
-    : today
-);
-
+const [startDate, setStartDate] = useState("2000-01-01");
 
 const [endDate, setEndDate] = useState(today);
 // Maximize toggle
@@ -95,7 +90,7 @@ const toggleMaximize = () => {
 };
 
 // Role filter
-const [roleFilter, setRoleFilter] = useState<"ALL" | "DOCTOR" | "NURSE">("ALL");
+const [roleFilter, setRoleFilter] = useState<"ALL" | "DOCTOR" | "NURSE" | "ADMIN">("ALL");
 
 const canCreateNotes =
   ["DOCTOR", "NURSE", "ADMIN"].includes(userType);
@@ -127,6 +122,7 @@ const formatPHTime = (dateString: string) => {
   });
 };
 const fetchFacility = async () => {
+
   try {
     const token = localStorage.getItem("token");
 
@@ -140,6 +136,7 @@ const fetchFacility = async () => {
     if (!res.ok) return;
 
     const data = await res.json();
+	console.log("API NOTES:", data);
 
     // ✅ Clean address builder (no extra commas)
 const addressParts = [
@@ -419,40 +416,35 @@ const handleVerified = async (verifiedUser: { id: number; username: string }) =>
 };
   /* ================= FILTER ================= */
 
-const filteredNotes = notes
-  .filter((note) => {
-    // STATUS FILTER
-    if (filter !== "All" && note.Status !== filter) {
-      return false;
-    }
+const filteredNotes = notes.filter((note) => {
 
-    // ROLE FILTER
-    if (roleFilter !== "ALL" && note.fk_usr_type_code?.toUpperCase() !== roleFilter) {
-      return false;
-    }
+  // STATUS FILTER
+  if (filter !== "All" && note.Status !== filter) {
+    return false;
+  }
+  
 
-    // DATE FILTER
+  // ROLE FILTER
+const role = (note.AuthorRole || "").toUpperCase();
+
+if (roleFilter !== "ALL" && role !== roleFilter) {
+  return false;
+}
+
+  // DATE FILTER (only when advanced filters enabled)
+  if (showAdvancedFilters) {
     const noteDate = new Date(note.LastModifiedAt || note.CreatedAt);
     const start = new Date(startDate);
     const end = new Date(endDate);
-
-    // Set end time to 23:59:59 for inclusive filtering
     end.setHours(23, 59, 59, 999);
 
-    return noteDate >= start && noteDate <= end;
-  });
-  
-  useEffect(() => {
-  setSelectedNoteIds([]);
-}, [filter, roleFilter, startDate, endDate]);
+    if (noteDate < start || noteDate > end) {
+      return false;
+    }
+  }
 
-const notesToPrint =
-  selectedNoteIds.length > 0
-    ? filteredNotes.filter(note =>
-        selectedNoteIds.includes(String(note.NoteID))
-      )
-    : filteredNotes;
-
+  return true;
+});
 
 const handlePrint = () => {
 
@@ -755,7 +747,7 @@ if (viewState === "minimized") {
 
     {/* ROLE FILTER */}
     <div className="flex gap-2">
-      {["ALL", "DOCTOR", "NURSE"].map((type) => (
+      {["ALL", "DOCTOR", "NURSE", "ADMIN"].map((type) => (
         <button
           key={type}
           onClick={() => setRoleFilter(type as any)}
@@ -885,10 +877,9 @@ return (
             {note.DisplayName}
           </p>
 
-          <p className="uppercase text-xs text-slate-500">
-            {note.fk_usr_type_code}
-          </p>
-
+<p className="uppercase text-xs text-slate-500">
+  {note.AuthorRole}
+</p>
           <p className="text-xs">
             {formatPHTime(note.CreatedAt)}
           </p>
