@@ -317,8 +317,13 @@ const filteredTemplates = [...templates]
 )}	
 	  {/* TEMPLATE LIST */}
 {!showForm && (
-  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
-    {filteredTemplates.map(template => (
+  filteredTemplates.length === 0 ? (
+    <div className="bg-white rounded-[32px] shadow-sm border border-slate-200 p-12 text-center text-slate-400 font-black uppercase text-sm tracking-widest">
+      No Templates Yet
+    </div>
+  ) : (
+    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mt-6">
+      {filteredTemplates.map(template => (
       <div
         key={template.id}
         className="relative bg-white rounded-3xl p-8 shadow-sm hover:shadow-xl transition-all duration-300 border border-slate-100"
@@ -353,6 +358,7 @@ const filteredTemplates = [...templates]
       </div>
     ))}
   </div>
+  )
 )}
 
       {/* FORM */}

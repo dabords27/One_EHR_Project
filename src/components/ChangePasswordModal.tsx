@@ -222,21 +222,22 @@ className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-wh
 <p className="text-red-400 text-xs mb-4">{error}</p>
 )}
 
-<div className="flex gap-4">
+<div className="flex gap-4 mt-2">
 
 <button
 onClick={onClose}
-className="flex-1 py-3 rounded-full text-xs text-white/50 border border-white/10"
+disabled={loading}
+className="flex-1 py-3 rounded-full text-xs font-semibold tracking-widest text-white/50 border border-white/10 hover:bg-white/5 transition"
 >
-Cancel
+CANCEL
 </button>
 
 <button
 onClick={handleSave}
 disabled={loading}
-className="flex-1 py-3 rounded-full text-xs bg-sky-500 text-white disabled:opacity-50"
+className="flex-1 py-3 rounded-full text-xs font-semibold tracking-widest bg-sky-500 hover:bg-sky-400 text-white transition disabled:opacity-50"
 >
-{loading ? "Saving..." : "Save"}
+{loading ? "SAVING..." : "VERIFY & CONTINUE"}
 </button>
 
 </div>
