@@ -50,7 +50,7 @@ export const SYSTEM_FIELD_REGISTRY: SystemFieldGroup[] = [
       { key: "patient.gender", label: "Gender", column: "gender" },
       { key: "patient.civil_status", label: "Civil Status", column: "civil_status" },
       { key: "patient.religion", label: "Religion", column: "religion" },
-      { key: "patient.nationality", label: "Nationality", column: "nationality" }
+      { key: "patient.nationality", label: "Nationality", column: "Nationality" }
     ]
   },
 
@@ -89,7 +89,7 @@ export const SYSTEM_FIELD_REGISTRY: SystemFieldGroup[] = [
   {
     group: "Doctors",
     fields: [
-      { key: "visit.attending_physician", label: "Attending Physician", column: "attending_physician" },
+      { key: "visit.attending_physician", label: "Attending Physician", column: "AttendingPhysician" },
       { key: "visit.admitting_doctor", label: "Admitting Doctor", column: "admitting_doctor" }
     ]
   },

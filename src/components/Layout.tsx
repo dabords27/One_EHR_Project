@@ -124,7 +124,15 @@ const hasPhoto =
     label="Setup" 
     isActive={currentView === 'setup'} 
     isCollapsed={isCollapsed}
-    onClick={() => onNavigate('setup')} 
+    onClick={() => {
+  if (currentView !== "setup") {
+    onNavigate("setup");
+  } else {
+    // force reload setup main page
+    onNavigate("");
+    setTimeout(() => onNavigate("setup"), 0);
+  }
+}}
   />
 )}
           </nav>

@@ -195,9 +195,34 @@ const API_BASE = useMemo(() => {
 }, []);
 const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
+const [history, setHistory] = useState<TemplateField[][]>([]);
+const [future, setFuture] = useState<TemplateField[][]>([]);
+
+const pushHistory = () => {
+  setHistory(prev => {
+    const newHistory = [...prev, JSON.parse(JSON.stringify(fields))];
+    return newHistory.slice(-50);
+  });
+
+  setFuture([]);
+};
+
+const [selectedFields, setSelectedFields] = useState<string[]>([]);
+const [contextMenu, setContextMenu] = useState<{
+  visible: boolean;
+  x: number;
+  y: number;
+}>({
+  visible: false,
+  x: 0,
+  y: 0
+});
+
 const [autosaveStatus, setAutosaveStatus] = useState<
   "idle" | "saving" | "saved"
 >("idle");
+
+
 
 useEffect(() => {
   const checkPdf = async () => {
@@ -214,7 +239,7 @@ useEffect(() => {
   };
 
   checkPdf();
-}, [templateId]);
+}, [templateId, API_BASE]);
 
 
 const pdfFileSource = useMemo(() => ({
@@ -226,6 +251,7 @@ const [pdfDimensions, setPdfDimensions] = useState<{
 } | null>(null);
 
 const addField = (type: string) => {
+pushHistory(); 
   const uniqueId =
     typeof crypto !== "undefined" && crypto.randomUUID
       ? crypto.randomUUID()
@@ -241,8 +267,8 @@ const addField = (type: string) => {
 
     xPercent: 0.2,
     yPercent: 0.2,
-    widthPercent: 0.15,
-    heightPercent: 0.03,
+    widthPercent: type === "checkbox" ? 0.02 : 0.15,
+heightPercent: type === "checkbox" ? 0.02 : 0.03,
 
     fieldName: `${baseName}_${uniqueId}`,
     label: generateUniqueLabel(type),
@@ -382,6 +408,7 @@ const isDuplicateLabel = (label: string, currentId?: string) => {
 };
 
 const updateSelectedField = (updates: any) => {
+pushHistory(); 
   if (!selectedField) return;
 
   setFields(prev =>
@@ -429,7 +456,9 @@ const updateSelectedField = (updates: any) => {
   });
   setHasUnsavedChanges(true);
 };
-const computeFormula = (field: TemplateField) => {
+const computeFormula = useMemo(() => {
+  return (field: TemplateField) => {
+  
   if (!field.formulaExpression?.trim()) return "";
 
   try {
@@ -486,6 +515,154 @@ const computeFormula = (field: TemplateField) => {
   } catch {
     return "";
   }
+  
+};
+}, [fields, previewValues]);
+
+const makeSameSize = () => {
+pushHistory();
+  if (selectedFields.length < 2) return;
+
+  const base = fields.find(f => f.id === selectedFields[0]);
+  if (!base) return;
+
+  setFields(prev =>
+    prev.map(f =>
+      selectedFields.includes(f.id)
+        ? {
+            ...f,
+            widthPercent: base.widthPercent,
+            heightPercent: base.heightPercent
+          }
+        : f
+    )
+  );
+
+  setContextMenu({ visible:false,x:0,y:0 });
+  setHasUnsavedChanges(true);
+};
+
+const makeSameWidth = () => {
+pushHistory();
+  if (selectedFields.length < 2) return;
+
+  const base = fields.find(f => f.id === selectedFields[0]);
+  if (!base) return;
+
+  setFields(prev =>
+    prev.map(f =>
+      selectedFields.includes(f.id)
+        ? { ...f, widthPercent: base.widthPercent }
+        : f
+    )
+  );
+
+  setContextMenu({ visible:false,x:0,y:0 });
+  setHasUnsavedChanges(true);
+};
+
+const makeSameHeight = () => {
+pushHistory();
+  if (selectedFields.length < 2) return;
+
+  const base = fields.find(f => f.id === selectedFields[0]);
+  if (!base) return;
+
+  setFields(prev =>
+    prev.map(f =>
+      selectedFields.includes(f.id)
+        ? { ...f, heightPercent: base.heightPercent }
+        : f
+    )
+  );
+
+  setContextMenu({ visible:false,x:0,y:0 });
+  setHasUnsavedChanges(true);
+};
+
+
+const alignTop = () => {
+  pushHistory();
+  if (selectedFields.length < 2) return;
+
+  const base = fields.find(f => f.id === selectedFields[0]);
+  if (!base) return;
+
+  setFields(prev =>
+    prev.map(f =>
+      selectedFields.includes(f.id)
+        ? { ...f, yPercent: base.yPercent }
+        : f
+    )
+  );
+
+  setContextMenu({ visible:false, x:0, y:0 });
+  setHasUnsavedChanges(true);
+};
+
+const alignLeft = () => {
+  pushHistory();
+  if (selectedFields.length < 2) return;
+
+  const base = fields.find(f => f.id === selectedFields[0]);
+  if (!base) return;
+
+  setFields(prev =>
+    prev.map(f =>
+      selectedFields.includes(f.id)
+        ? { ...f, xPercent: base.xPercent }
+        : f
+    )
+  );
+
+  setContextMenu({ visible:false, x:0, y:0 });
+  setHasUnsavedChanges(true);
+};
+
+const alignRight = () => {
+  pushHistory();
+  if (selectedFields.length < 2) return;
+
+  const base = fields.find(f => f.id === selectedFields[0]);
+  if (!base) return;
+
+  const baseRight = base.xPercent + base.widthPercent;
+
+  setFields(prev =>
+    prev.map(f =>
+      selectedFields.includes(f.id)
+        ? {
+            ...f,
+            xPercent: baseRight - f.widthPercent
+          }
+        : f
+    )
+  );
+
+  setContextMenu({ visible:false, x:0, y:0 });
+  setHasUnsavedChanges(true);
+};
+
+
+const undo = () => {
+
+  if (history.length === 0) return;
+
+  const previous = history[history.length - 1];
+
+  setFuture(prev => [fields, ...prev]);
+  setFields(previous);
+  setHistory(prev => prev.slice(0, -1));
+};
+
+const redo = () => {
+  if (future.length === 0) return;
+
+  const next = future[0];
+
+  setHistory(prev => [...prev, fields]);
+  setFields(next);
+  setFuture(prev => prev.slice(1));
 };
 
 useEffect(() => {
@@ -494,6 +671,46 @@ useEffect(() => {
     setSelectedField(null);
   }
 }, [isPreviewMode]);
+
+useEffect(() => {
+  const closeMenu = (e: MouseEvent) => {
+
+    const menu = document.getElementById("builder-context-menu");
+
+    if (menu && menu.contains(e.target as Node)) return;
+
+    setContextMenu({ visible:false, x:0, y:0 });
+
+  };
+
+  window.addEventListener("mousedown", closeMenu);
+
+  return () =>
+    window.removeEventListener("mousedown", closeMenu);
+}, []);
+
+useEffect(() => {
+
+  const handleUndoRedo = (e: KeyboardEvent) => {
+
+    if (e.ctrlKey && e.key === "z") {
+      e.preventDefault();
+      undo();
+    }
+
+    if (e.ctrlKey && e.key === "y") {
+      e.preventDefault();
+      redo();
+    }
+
+  };
+
+  window.addEventListener("keydown", handleUndoRedo);
+
+  return () =>
+    window.removeEventListener("keydown", handleUndoRedo);
+
+}, [history, future, fields]);
 
 useEffect(() => {
   if (templateId) {
@@ -533,7 +750,8 @@ if (
 
     // 🛑 STOP PAGE SCROLL
     e.preventDefault();
-
+if (e.repeat) return;
+pushHistory();
     const step = e.shiftKey ? 10 : 1;
 
     setFields(prev =>
@@ -723,6 +941,21 @@ const response = await fetch(
   {autosaveStatus === "saving" && "Saving..."}
   {autosaveStatus === "saved" && "All changes saved"}
 </div>
+    {/* UNDO REDO */}
+
+<button
+  onClick={undo}
+  className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold"
+>
+Undo
+</button>
+
+<button
+  onClick={redo}
+  className="px-3 py-1 bg-slate-100 rounded-lg text-xs font-bold"
+>
+Redo
+</button>
 
     {/* ZOOM */}
     <div className="flex items-center gap-2">
@@ -758,17 +991,7 @@ const response = await fetch(
       </button>
 	  
 	    {/* AUTOSAVE STATUS */}
-  <div className="text-xs font-semibold text-slate-500 w-[140px] text-right">
 
-    {autosaveStatus === "saving" && (
-      <span>Saving...</span>
-    )}
-
-    {autosaveStatus === "saved" && (
-      <span className="text-emerald-600">✓ Saved</span>
-    )}
-
-  </div>
 
       <span className="text-xs font-bold">
         Page {currentPage} / {numPages || 1}
@@ -840,11 +1063,8 @@ className={`px-4 py-2 text-xs font-bold rounded-lg ${
    {FIELD_TYPES.map((field) => (
   <button
     key={field.type}
-    onClick={() => {
-      if (!isPreviewMode) {
-        addField(field.type);
-      }
-    }}
+onClick={() => { 
+if (isPreviewMode) return; addField(field.type); }}
     disabled={isPreviewMode}
     className={`w-full flex items-center gap-3 px-4 py-2.5 text-xs font-black uppercase transition-all ${
       isPreviewMode
@@ -919,6 +1139,7 @@ const previewFontStyle = {
   fontStyle: field.fontStyle,
   textAlign: field.textAlign,
 };
+
 
   return (
     <div
@@ -1083,9 +1304,8 @@ const previewFontStyle = {
 {/* CHECKBOX (Preview Mode) */}
 {field.type === "checkbox" && (
   <input
-  disabled={isSystemField}
+    disabled={isSystemField}
     type="checkbox"
-	style={previewFontStyle}
     checked={previewValues[field.fieldName] || false}
     onChange={(e) =>
       setPreviewValues(prev => ({
@@ -1093,8 +1313,14 @@ const previewFontStyle = {
         [field.fieldName]: e.target.checked
       }))
     }
+    style={{
+      width: "100%",
+      height: "100%",
+      margin: 0,
+      cursor: "pointer"
+    }}
   />
-)}		
+)}	
 
 {/* LIST (Preview Mode) */}
 {field.type === "list" && (
@@ -1329,6 +1555,22 @@ return (
   <Rnd
     key={field.id}
     bounds="parent"
+	onContextMenu={(e) => {
+  if (isPreviewMode) return;
+
+
+  e.preventDefault();
+
+  if (!selectedFields.includes(field.id)) {
+    setSelectedFields([field.id]);
+  }
+
+  setContextMenu({
+    visible: true,
+    x: e.clientX,
+    y: e.clientY
+  });
+}}
     size={{
       width: pdfDimensions
         ? field.widthPercent * pdfDimensions.width
@@ -1345,58 +1587,100 @@ return (
         ? field.yPercent * pdfDimensions.height
         : 0
     }}
-    onDragStop={(e, d) => {
-      if (!pdfDimensions) return;
+ onDrag={(e, d) => {
+    if (!pdfDimensions) return;
 
-      const newXPercent = d.x / pdfDimensions.width;
-      const newYPercent = d.y / pdfDimensions.height;
+    const deltaX = d.deltaX;
+    const deltaY = d.deltaY;
 
-      setFields(prev =>
-        prev.map(f =>
-          f.id === field.id
-            ? { ...f, xPercent: newXPercent, yPercent: newYPercent }
-            : f
-        )
-      );
-	  setHasUnsavedChanges(true);
-    }}
-    onResizeStop={(e, direction, ref, delta, position) => {
-      if (!pdfDimensions) return;
+    setFields(prev =>
+      prev.map(f => {
+        if (!selectedFields.includes(f.id)) return f;
 
-      const newWidthPercent =
-        ref.offsetWidth / pdfDimensions.width;
+        const newX =
+          f.xPercent * pdfDimensions.width + deltaX;
 
-      const newHeightPercent =
-        ref.offsetHeight / pdfDimensions.height;
+        const newY =
+          f.yPercent * pdfDimensions.height + deltaY;
 
-      const newXPercent =
-        position.x / pdfDimensions.width;
+        return {
+          ...f,
+          xPercent: newX / pdfDimensions.width,
+          yPercent: newY / pdfDimensions.height
+        };
+      })
+    );
+  }}
 
-      const newYPercent =
-        position.y / pdfDimensions.height;
+  onDragStop={() => {
+    pushHistory();
+    setHasUnsavedChanges(true);
+  }}
 
-      setFields(prev =>
-        prev.map(f =>
-          f.id === field.id
-            ? {
-                ...f,
-                widthPercent: newWidthPercent,
-                heightPercent: newHeightPercent,
-                xPercent: newXPercent,
-                yPercent: newYPercent
-              }
-            : f
-        )
-      );
-	  setHasUnsavedChanges(true);
-    }}
-    onClick={() => {
-      if (!isPreviewMode) {
-        setSelectedField(field);
-      }
-    }}
+onResizeStop={(e, direction, ref, delta, position) => {
+  pushHistory();
+
+  if (!pdfDimensions) return;
+
+  let newWidthPercent =
+    ref.offsetWidth / pdfDimensions.width;
+
+  let newHeightPercent =
+    ref.offsetHeight / pdfDimensions.height;
+
+  const newXPercent =
+    position.x / pdfDimensions.width;
+
+  const newYPercent =
+    position.y / pdfDimensions.height;
+
+
+// 🔹 Keep checkbox square
+if (field.type === "checkbox") {
+
+  const size = Math.min(ref.offsetWidth, ref.offsetHeight);
+
+  newWidthPercent = size / pdfDimensions.width;
+  newHeightPercent = size / pdfDimensions.height;
+
+
+}
+
+  setFields(prev =>
+    prev.map(f =>
+      f.id === field.id
+        ? {
+            ...f,
+            widthPercent: newWidthPercent,
+            heightPercent: newHeightPercent,
+            xPercent: newXPercent,
+            yPercent: newYPercent
+          }
+        : f
+    )
+  );
+
+  setHasUnsavedChanges(true);
+}}
+onClick={(e) => {
+  if (isPreviewMode) {
+    e.stopPropagation();
+    return;
+  }
+
+  if (e.shiftKey) {
+    setSelectedFields(prev =>
+      prev.includes(field.id)
+        ? prev.filter(id => id !== field.id)
+        : [...prev, field.id]
+    );
+  } else {
+    setSelectedFields([field.id]);
+    setSelectedField(field);
+  }
+}}
     className={`border-2 ${
-      selectedField?.id === field.id
+     selectedFields.includes(field.id)
         ? "border-blue-500"
         : "border-emerald-400"
     } bg-white text-[10px] font-bold cursor-move`}
@@ -1455,9 +1739,18 @@ return (
       )}
 
       {/* CHECKBOX */}
-      {field.type === "checkbox" && (
-        <input type="checkbox" disabled />
-      )}
+    {field.type === "checkbox" && (
+<input
+  type="checkbox"
+  disabled
+  style={{
+    width: "100%",
+    height: "100%",
+    margin: 0,
+    pointerEvents: "none"
+  }}
+/>
+)}
 {/* LIST (Builder Mode) */}
 {field.type === "list" && (
   <div
@@ -1930,6 +2223,7 @@ return (
 </button>
 </div>
 {/* FONT STYLE SIZE POSITION*/}
+{selectedField.type !== "checkbox" && (
 <div className="space-y-2">
 
   <label className="text-[10px] font-black uppercase text-slate-400">
@@ -1971,8 +2265,9 @@ return (
     </select>
 
   </div>
+  
 </div>
-
+)}
 <div className="space-y-1">
   <label className="text-[10px] font-black uppercase text-slate-400">
     Font Family
@@ -2095,6 +2390,7 @@ return (
 
         <button
 onClick={() => {
+pushHistory();
   setFields(prev =>
     prev.filter(f => f.id !== selectedField.id)
   );
@@ -2147,6 +2443,80 @@ onClick={() => {
     </div>
   </div>
 )}
+
+{contextMenu.visible && (
+  <div
+   id="builder-context-menu"
+    style={{
+      position: "fixed",
+      top: contextMenu.y,
+      left: contextMenu.x,
+      background: "white",
+      border: "1px solid #ddd",
+      borderRadius: 6,
+      zIndex: 99999,
+      boxShadow: "0 4px 10px rgba(0,0,0,0.15)"
+    }}
+  >
+<div className="py-1 text-xs font-semibold text-slate-700">
+
+<button
+  onClick={alignTop}
+  className="block w-full text-left px-4 py-2 hover:bg-slate-100"
+>
+  Align Top
+</button>
+
+<button
+  onClick={alignLeft}
+  className="block w-full text-left px-4 py-2 hover:bg-slate-100"
+>
+  Align Left
+</button>
+
+<button
+  onClick={alignRight}
+  className="block w-full text-left px-4 py-2 hover:bg-slate-100"
+>
+  Align Right
+</button>
+
+<div className="border-t my-1"></div>
+
+<button
+  onClick={makeSameWidth}
+  className="block w-full text-left px-4 py-2 hover:bg-slate-100"
+>
+  Same Width
+</button>
+
+<button
+  onClick={makeSameHeight}
+  className="block w-full text-left px-4 py-2 hover:bg-slate-100"
+>
+  Same Height
+</button>
+
+<button
+  onClick={makeSameSize}
+  className="block w-full text-left px-4 py-2 hover:bg-slate-100"
+>
+  Same Size
+</button>
+
+<div className="border-t my-1"></div>
+
+<button
+  onClick={() => setContextMenu({ visible:false,x:0,y:0 })}
+  className="block w-full text-left px-4 py-2 hover:bg-red-50 text-red-600"
+>
+  Cancel
+</button>
+
+</div>
+  </div>
+)}
+
 <TransactionOverlay
   key={txKey}
   status={txStatus}

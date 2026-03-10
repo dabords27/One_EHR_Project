@@ -159,7 +159,9 @@ if (bindingKey === "patient_name") {
 
   for (const group of SYSTEM_FIELD_REGISTRY) {
 
-    const found = group.fields.find(f => f.key === bindingKey);
+ const found = group.fields.find(
+  f => normalize(f.key) === normalize(bindingKey)
+);
     if (!found) continue;
 
     /* Single Column Field */
