@@ -1073,7 +1073,7 @@ const previewFontStyle = {
           className="w-full border border-slate-300 text-xs bg-white"
         >
           {(field.options?.length ? field.options : ["Option 1"]).map((opt, index) => (
-            <option key={`${field.fieldName}-${opt}`} value={opt}>
+            <option key={`${field.id}-opt-${index}`} value={opt}>
               {opt}
             </option>
           ))}
@@ -1750,7 +1750,7 @@ return (
     </label>
 
     {selectedField.options?.map((opt, index) => (
-      <div key={`${selectedField.fieldName}-${opt}-${index}`} className="flex gap-2 mt-1">
+      <div key={`${selectedField.id}-opt-${index}`} className="flex gap-2 mt-1">
         <input
           type="text"
           value={opt}
