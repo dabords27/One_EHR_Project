@@ -309,7 +309,7 @@ const handleFileChange = (
         canvasRef.current.width = videoRef.current.videoWidth;
         canvasRef.current.height = videoRef.current.videoHeight;
         context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-        setFormData(prev => ({ ...prev, profileImage: canvasRef.current!.toDataURL('image/png') }));
+        setFormData(prev => ({ ...prev, profileImage: canvasRef.current!.toDataURL('image/jpeg', 0.8)}));
         stopCamera();
       }
     }
@@ -494,10 +494,22 @@ const performSave = async (verifiedUsername: string) => {
     });
 
     // 🔥 IMPORTANT — send real FILE objects
-    if (photoInputRef.current?.files?.[0]) {
-      formDataToSend.append("profileImage", photoInputRef.current.files[0]);
-    }
+ // Upload from file input
+if (photoInputRef.current?.files?.[0]) {
+  formDataToSend.append("profileImage", photoInputRef.current.files[0]);
+}
 
+// Upload from camera capture (base64)
+else if (formData.profileImage && formData.profileImage.startsWith("data:image")) {
+  const res = await fetch(formData.profileImage);
+  const blob = await res.blob();
+
+  const file = new File([blob], "camera-photo.png", {
+    type: "image/png"
+  });
+
+  formDataToSend.append("profileImage", file);
+}
     if (fileInputRef.current?.files?.[0]) {
       formDataToSend.append("signature", fileInputRef.current.files[0]);
     }
@@ -1170,9 +1182,52 @@ const handleToggleStatus = async (verifiedUsername: string) => {
   })}
         </tbody>
       </table>
+	  
+	  
     </div>
   </>
 )}
+
+{showCamera && (
+  <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center">
+    
+    <div className="bg-white rounded-2xl p-6 shadow-2xl w-[520px] flex flex-col items-center gap-4">
+
+      <h3 className="text-sm font-black uppercase text-slate-700 tracking-wide">
+        Capture Photo
+      </h3>
+
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        className="w-full rounded-xl border border-slate-200"
+      />
+
+      <canvas ref={canvasRef} className="hidden" />
+
+      <div className="flex gap-3 mt-2">
+        
+        <button
+          onClick={capturePhoto}
+          className="px-6 py-2 bg-emerald-600 text-white text-xs font-black uppercase rounded-xl hover:bg-emerald-700"
+        >
+          Capture
+        </button>
+
+        <button
+          onClick={stopCamera}
+          className="px-6 py-2 bg-slate-200 text-slate-700 text-xs font-black uppercase rounded-xl hover:bg-slate-300"
+        >
+          Cancel
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
+
 <StatusConfirmationModal
   isOpen={statusModal.isOpen}
   targetName={statusModal.user?.fullName || ""}

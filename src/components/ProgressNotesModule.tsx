@@ -446,19 +446,45 @@ if (roleFilter !== "ALL" && role !== roleFilter) {
   return true;
 });
 
-const handlePrint = () => {
+const getBase64Image = async (url: string) => {
+  const res = await fetch(url);
+  const blob = await res.blob();
 
-if (!facility) {
-  alert("Facility information not loaded.");
-  return;
-}
+  return new Promise<string>((resolve) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.readAsDataURL(blob);
+  });
+};
 
-const facilityName = facility.name;
-const facilityAddress = facility.address;
-const facilityLogoUrl = facility.logoUrl;
+const handlePrint = async () => {
+
+  if (!facility) {
+    alert("Facility information not loaded.");
+    return;
+  }
+
+  const notesToPrint =
+    selectedNoteIds.length > 0
+      ? notes.filter(n => selectedNoteIds.includes(String(n.NoteID)))
+      : filteredNotes;
+
+  const facilityName = facility.name;
+  const facilityAddress = facility.address;
+  const facilityLogoUrl = facility.logoUrl;
 
   const printWindow = window.open("", "_blank");
   if (!printWindow) return;
+  
+  let logoBase64 = "";
+
+if (facility.logoUrl) {
+  try {
+    logoBase64 = await getBase64Image(facility.logoUrl);
+  } catch {
+    logoBase64 = "";
+  }
+}
 
   const htmlContent = `
     <html>
@@ -493,6 +519,21 @@ const facilityLogoUrl = facility.logoUrl;
   .header-info {
     margin-bottom: 20px;
   }
+  
+  @page {
+  size: A4;
+  margin: 12mm;
+}
+
+body {
+  font-family: Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.note {
+  page-break-inside: avoid;
+}
 
   .meta {
     font-size: 11px;
@@ -511,23 +552,28 @@ const facilityLogoUrl = facility.logoUrl;
 </style>
       </head>
       <body>
-  <div style="text-align:center; margin-bottom:20px;">
-    ${facilityLogoUrl ? `
-  <img src="${facilityLogoUrl}" style="height:60px; margin-bottom:10px;" />
-` : ""}
-    <div style="font-size:16px; font-weight:bold;">
+<div style="display:grid; grid-template-columns:60px 1fr; gap:10px; align-items:center; margin-bottom:6px;">
+
+  <img src="${logoBase64}" style="height:50px;" />
+
+  <div>
+    <div style="font-size:15px; font-weight:bold;">
       ${facilityName}
     </div>
-${facilityAddress && facilityAddress.replace(/[, ]/g, "").length > 0 ? `
-<div style="font-size:12px;">
-  ${facilityAddress}
-</div>
-` : ""}
+
+    <div style="font-size:11px;">
+      ${facilityAddress}
+    </div>
   </div>
+
+</div>
+
+<hr style="margin:6px 0 10px 0;" />
+
+<h2 style="text-align:center; margin:0 0 10px 0;">PROGRESS NOTES</h2>
 
   <hr/>
 
-  <h2 style="text-align:center;">PROGRESS NOTES</h2>
 
 <div style="margin-top:15px;">
   <strong>Patient:</strong> ${patientFullName}<br/>
@@ -561,13 +607,11 @@ return `
       note.Status === "FINALIZED" && isSameUser
         ? `
           <strong>Author & Electronically Signed By:</strong> ${note.DisplayName}<br/>
-          <strong>Role:</strong> ${note.fk_usr_type_code}<br/>
           <strong>Authored:</strong> ${formatPHTime(note.CreatedAt)}<br/>
           <strong>Signed:</strong> ${formatPHTime(note.FinalizedAt)}
         `
         : `
           <strong>Author:</strong> ${note.DisplayName}<br/>
-          <strong>Role:</strong> ${note.fk_usr_type_code}<br/>
           <strong>Date/Time Authored:</strong> ${formatPHTime(note.CreatedAt)}
         `
     }
@@ -577,7 +621,6 @@ return `
         ? `
         <br/>
         <strong>Electronically Signed By:</strong> ${note.FinalizedByName}<br/>
-        <strong>Role:</strong> ${note.FinalizedByRole || note.fk_usr_type_code}<br/>
         <strong>Date/Time Signed:</strong> ${formatPHTime(note.FinalizedAt)}
         `
         : ""
@@ -596,9 +639,14 @@ return `
     </html>
   `;
 
-  printWindow.document.write(htmlContent);
-  printWindow.document.close();
+printWindow.document.write(htmlContent);
+printWindow.document.close();
+
+setTimeout(() => {
+  printWindow.focus();
   printWindow.print();
+  printWindow.close();
+}, 500);
 };
 
   /* ================= POSITION ================= */

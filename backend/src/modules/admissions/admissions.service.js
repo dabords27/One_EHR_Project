@@ -102,7 +102,7 @@ const getDischargesToday = async (pool) => {
     WHERE
         DischargeDateTime IS NOT NULL
         AND CAST(DischargeDateTime AS DATE) = CAST(GETDATE() AS DATE)
-        AND (Status IS NULL OR Status <> 'X')
+        AND (Status IS NULL OR Status <> 'X') AND PatientType='Inpatient'
   `);
 
   return result.recordset[0].DischargesToday;
