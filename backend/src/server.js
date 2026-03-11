@@ -39,6 +39,8 @@ async function startServer() {
     app.use("/api/facility", require("./modules/facilityinformation/facilityinformation.routes"));
     app.use("/api/custom-forms", require("./modules/custom-forms/custom-forms.routes"));
 	app.use("/api/patient-documents", require("./modules/patient-documents/patient-document.routes"));
+	
+	app.use("/api/audit-trail", require("./modules/audit-trail/audit-trail.routes"));
     // ==============================
     // 🔥 SERVE UPLOADS (IMPORTANT)
     // ==============================

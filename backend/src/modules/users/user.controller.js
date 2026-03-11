@@ -164,7 +164,8 @@ const result = await userService.updateUserStatus(
   req.app.locals.pool,
   req.params.id,
   usr_status_active,
-  updatedBy
+  updatedBy,
+  req.body.pc_name
 );
 
     res.json(result);

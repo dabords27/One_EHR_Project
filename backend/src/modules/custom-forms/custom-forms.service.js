@@ -1,6 +1,44 @@
 const sql = require("mssql");
 
 
+/* =====================================================
+   SAFE STRING FOR AUDIT VALUES
+===================================================== */
+const safeString = (val) => {
+  if (val === undefined || val === null) return null;
+  return String(val);
+};
+
+/* =====================================================
+   NORMALIZE VALUES
+===================================================== */
+const normalize = (v) => {
+  if (v === undefined || v === null) return null;
+  const s = String(v).trim();
+  return s === "" ? null : s;
+};
+
+/* =====================================================
+   AUDIT LOGGER
+===================================================== */
+const logAudit = async (transaction, data) => {
+
+  await transaction.request()
+    .input("table_name", sql.VarChar(100), data.table)
+    .input("record_id", sql.VarChar(100), data.recordId)
+    .input("transaction", sql.VarChar(200), data.transaction)
+    .input("transaction_type", sql.VarChar(20), data.type)
+    .input("old_value", sql.NVarChar(sql.MAX), safeString(data.oldValue))
+    .input("new_value", sql.NVarChar(sql.MAX), safeString(data.newValue))
+    .input("module", sql.VarChar(100), "CUSTOM_FORM_MANAGEMENT")
+    .input("username", sql.VarChar(100), data.username || "SYSTEM")
+    .input("pc_name", sql.VarChar(100), data.pcName || "UNKNOWN")
+    .execute("sp_insert_audit");
+
+};
+
+
+
 /* =========================
    REPOSITORY RECORDS
 ========================= */
@@ -29,7 +67,7 @@ SELECT
   END AS patient_status,
 
   p.AdmissionDateTime AS date_admitted,
-pf.created_by,
+  pf.created_by,
 
   ISNULL(u.usr_custom_name, 'System') AS author_name
 
@@ -53,6 +91,7 @@ ORDER BY pf.date_created DESC
 };
 
 
+
 /* =========================
    LOAD SINGLE PATIENT FORM
 ========================= */
@@ -67,7 +106,6 @@ SELECT
   pf.template_snapshot,
   pf.filled_data,
 
-  /* PATIENT */
   p.RegistryTrackingNo AS registry_tracking_no,
   p.MRN AS mrn,
   p.Firstname AS first_name,
@@ -80,35 +118,29 @@ SELECT
   p.Religion AS religion,
   p.Nationality AS nationality,
 
-  /* ADDRESS */
   p.FullAddress AS full_address,
   p.Barangay AS barangay,
   p.TownCity AS town_city,
   p.Province AS province,
   p.Region AS region,
 
-/* VISIT */
-p.CaseNo AS case_id,
-p.PatientType AS patient_type,
-p.ServiceType AS service_type,
-p.TransactionType AS transaction_type,
-p.RoomBedNo AS room_no,
+  p.CaseNo AS case_id,
+  p.PatientType AS patient_type,
+  p.ServiceType AS service_type,
+  p.TransactionType AS transaction_type,
+  p.RoomBedNo AS room_no,
 
-/* AGE */
-p.Age AS Age,
-p.Age2 AS Age2,
+  p.Age AS Age,
+  p.Age2 AS Age2,
 
-  /* DOCTORS */
   p.AttendingPhysician AS attending_physician,
   p.AdmittingDoctor AS admitting_doctor,
 
-  /* DIAGNOSIS */
   p.InitialDiagnosis AS initial_diagnosis,
   p.ICD10Code AS icd10_code,
   p.ICD10Description AS icd10_description,
   p.SecondaryDischargeDiagnosis AS secondary_discharge_diagnosis,
 
-  /* ADMISSION */
   p.AdmissionDateTime AS date_admitted,
   p.ArrivalDateTime AS arrival_datetime,
   p.DischargeDateTime AS discharge_datetime,
@@ -122,5 +154,141 @@ WHERE pf.patient_form_id = ${patientFormId}
   `;
 
   return result.recordset[0];
+
+};
+
+
+
+/* =========================
+   CREATE PATIENT FORM
+========================= */
+
+exports.createPatientForm = async (data, currentUser) => {
+
+  const pool = await sql.connect();
+  const transaction = pool.transaction();
+
+  try {
+
+    await transaction.begin();
+
+    const createdBy = currentUser?.username || "SYSTEM";
+
+    const result = await transaction.request()
+      .input("template_id", sql.Int, data.template_id)
+      .input("patient_id", sql.VarChar(50), data.patient_id)
+      .input("template_snapshot", sql.NVarChar(sql.MAX), data.template_snapshot)
+      .input("filled_data", sql.NVarChar(sql.MAX), data.filled_data)
+      .input("created_by", sql.VarChar(100), createdBy)
+      .query(`
+        INSERT INTO dbo.PatientCustomForms
+        (
+          template_id,
+          patient_id,
+          template_snapshot,
+          filled_data,
+          status,
+          created_by,
+          date_created
+        )
+        OUTPUT INSERTED.patient_form_id
+        VALUES
+        (
+          @template_id,
+          @patient_id,
+          @template_snapshot,
+          @filled_data,
+          'ACTIVE',
+          @created_by,
+          GETDATE()
+        )
+      `);
+
+    const newFormId = result.recordset[0].patient_form_id;
+
+    /* AUDIT INSERT */
+
+    await logAudit(transaction, {
+      table: "PatientCustomForms",
+      recordId: newFormId,
+      transaction: "Create Patient Custom Form",
+      type: "ADD",
+      newValue: data.template_id,
+      username: createdBy
+    });
+
+    await transaction.commit();
+
+    return newFormId;
+
+  } catch (err) {
+
+    await transaction.rollback();
+    throw err;
+
+  }
+
+};
+
+
+
+/* =========================
+   UPDATE PATIENT FORM
+========================= */
+
+exports.updatePatientForm = async (formId, data, currentUser) => {
+
+  const pool = await sql.connect();
+  const transaction = pool.transaction();
+
+  try {
+
+    await transaction.begin();
+
+    const updatedBy = currentUser?.username || "SYSTEM";
+
+    /* GET OLD DATA */
+
+    const oldResult = await transaction.request()
+      .input("formId", sql.Int, formId)
+      .query(`
+        SELECT filled_data
+        FROM dbo.PatientCustomForms
+        WHERE patient_form_id = @formId
+      `);
+
+    const oldData = oldResult.recordset[0];
+
+    /* UPDATE FORM */
+
+    await transaction.request()
+      .input("formId", sql.Int, formId)
+      .input("filled_data", sql.NVarChar(sql.MAX), data.filled_data)
+      .query(`
+        UPDATE dbo.PatientCustomForms
+        SET filled_data = @filled_data
+        WHERE patient_form_id = @formId
+      `);
+
+    /* AUDIT UPDATE */
+
+    await logAudit(transaction, {
+      table: "PatientCustomForms",
+      recordId: formId,
+      transaction: "Update Patient Custom Form",
+      type: "UPDATE",
+      oldValue: oldData?.filled_data,
+      newValue: data.filled_data,
+      username: updatedBy
+    });
+
+    await transaction.commit();
+
+  } catch (err) {
+
+    await transaction.rollback();
+    throw err;
+
+  }
 
 };

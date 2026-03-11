@@ -467,6 +467,7 @@ const performSave = async (verifiedUsername: string) => {
   try {
     const formDataToSend = new FormData();
 
+formDataToSend.append("pc_name", window.location.hostname);
     formDataToSend.append("usr_last_name", formData.lastName);
     formDataToSend.append("usr_first_name", formData.firstName);
     formDataToSend.append("usr_middle_name", formData.middleName);
@@ -624,10 +625,11 @@ const handleToggleStatus = async (verifiedUsername: string) => {
           ...getAuthHeaders(),
           "Content-Type": "application/json"
         },
-        body: JSON.stringify({
-          usr_status_active: newStatus,
-          updatedBy: verifiedUsername
-        })
+ body: JSON.stringify({
+  usr_status_active: newStatus,
+  updatedBy: verifiedUsername,
+  pc_name: window.location.hostname
+})
       }
     );
 

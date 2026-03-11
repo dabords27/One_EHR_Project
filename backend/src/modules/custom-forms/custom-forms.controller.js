@@ -52,3 +52,32 @@ res.json({
 
   }
 };
+
+exports.updatePatientForm = async (req, res) => {
+
+  try {
+
+    const formId = req.params.id;
+
+    const updatedId = await customService.updatePatientForm(
+      formId,
+      req.body,
+      req.user
+    );
+
+    res.json({
+      message: "Patient form updated successfully",
+      id: updatedId
+    });
+
+  } catch (err) {
+
+    console.error("UPDATE PATIENT FORM ERROR:", err);
+
+    res.status(500).json({
+      error: "Failed to update patient form"
+    });
+
+  }
+
+};
