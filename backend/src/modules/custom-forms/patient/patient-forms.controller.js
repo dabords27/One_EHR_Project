@@ -1,5 +1,6 @@
-const sql = require("mssql");
 
+const sql = require("mssql");
+const { logAudit } = require("../custom-forms.service");
 
 
 exports.saveDraft = async (req, res) => {
@@ -22,6 +23,38 @@ exports.saveDraft = async (req, res) => {
 // EDIT EXISTING DRAFT
 if (patient_form_id) {
 
+  /* =========================
+     ADDED: GET OLD DATA
+  ========================= */
+
+  const oldResult = await pool.request()
+    .input("patient_form_id", sql.Int, patient_form_id)
+    .query(`
+      SELECT filled_data, template_snapshot
+      FROM dbo.PatientCustomForms
+      WHERE patient_form_id = @patient_form_id
+    `);
+
+  const oldData = oldResult.recordset[0]?.filled_data
+    ? JSON.parse(oldResult.recordset[0].filled_data)
+    : {};
+
+  const templateSnapshot = oldResult.recordset[0]?.template_snapshot
+    ? JSON.parse(oldResult.recordset[0].template_snapshot)
+    : null;
+
+  /* =========================
+     ADDED: CREATE FIELD LABEL MAP
+  ========================= */
+
+  let fieldLabels = {};
+
+  if (templateSnapshot?.fields) {
+    templateSnapshot.fields.forEach(f => {
+      fieldLabels[f.fieldName] = f.label || f.fieldName;
+    });
+  }
+
   await pool.request()
     .input("patient_form_id", sql.Int, patient_form_id)
     .input("filled_data", sql.NVarChar(sql.MAX), JSON.stringify(filled_data))
@@ -32,6 +65,48 @@ if (patient_form_id) {
       WHERE patient_form_id = @patient_form_id
       AND status = 'DRAFT'
     `);
+
+  /* =========================
+     AUDIT UPDATE DRAFT
+  ========================= */
+
+  const auditTransaction = new sql.Transaction(pool);
+  await auditTransaction.begin();
+
+  /* =========================
+     ADDED: FIELD LEVEL AUDIT
+  ========================= */
+
+  for (const key of Object.keys(filled_data)) {
+
+    const oldVal = oldData[key];
+    const newVal = filled_data[key];
+
+    if (
+      oldVal !== newVal &&
+      newVal !== null &&
+      newVal !== "" &&
+      newVal !== false
+    ) {
+
+      const label = fieldLabels[key] || key;
+
+      await logAudit(auditTransaction,{
+        table:"PatientCustomForms",
+        recordId:patient_form_id,
+        transaction:`Update ${label}`,
+        type:"UPDATE",
+        oldValue: oldVal ? String(oldVal) : null,
+        newValue: newVal ? String(newVal) : null,
+        username:String(user_id),
+        pcName:req.ip
+      });
+
+    }
+
+  }
+
+  await auditTransaction.commit();
 
   return res.json({
     success: true,
@@ -76,6 +151,51 @@ if (patient_form_id) {
 
     const newId = result.recordset[0].patient_form_id;
 
+    /* =========================
+       AUDIT CREATE DRAFT
+    ========================= */
+
+    const auditTransaction = new sql.Transaction(pool);
+    await auditTransaction.begin();
+
+    /* =========================
+       ADDED: LABEL MAP FOR CREATION
+    ========================= */
+
+    let fieldLabels = {};
+
+    if (template_snapshot?.fields) {
+      template_snapshot.fields.forEach(f => {
+        fieldLabels[f.fieldName] = f.label || f.fieldName;
+      });
+    }
+
+    /* =========================
+       ADDED: LOG EACH FIELD
+    ========================= */
+
+    for (const key of Object.keys(filled_data)) {
+
+      const value = filled_data[key];
+
+      if (value === null || value === "" || value === false) continue;
+
+      const label = fieldLabels[key] || key;
+
+      await logAudit(auditTransaction,{
+        table:"PatientCustomForms",
+        recordId:newId,
+        transaction:`Create ${label}`,
+        type:"ADD",
+        newValue:String(value),
+        username:String(user_id),
+        pcName:req.ip
+      });
+
+    }
+
+    await auditTransaction.commit();
+
     res.json({
       success: true,
       patient_form_id: newId
@@ -119,6 +239,27 @@ const user_id = req.user.id;
           date_locked = GETDATE()
         WHERE patient_form_id = @patient_form_id
       `);
+
+    /* =========================
+       AUDIT FINALIZE
+    ========================= */
+
+    const auditTransaction = new sql.Transaction(pool);
+    await auditTransaction.begin();
+
+const values = Object.values(filled_data)
+  .filter(v => v !== null && v !== "" && v !== false);
+
+await logAudit(auditTransaction,{
+  table:"PatientCustomForms",
+  recordId:patient_form_id,
+  transaction:"Finalize Patient Form",
+  type:"UPDATE",
+  newValue:values.join(", "),
+  username:String(user_id),
+  pcName:req.ip
+});
+    await auditTransaction.commit();
 
     res.json({ success: true });
 
@@ -182,6 +323,7 @@ exports.getFormById = async (req, res) => {
     ON f.patient_id = p.RegistryTrackingNo
   WHERE f.patient_form_id = @formId
 `);
+
     const record = result.recordset[0];
 
     if (!record) {
@@ -216,6 +358,7 @@ res.json({
   }
 
 };
+
 
 exports.getPatientRegistry = async (req, res) => {
 

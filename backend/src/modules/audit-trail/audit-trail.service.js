@@ -18,17 +18,9 @@ const getAuditLogs = async ({
   request.input("search", sql.VarChar, search || "");
   request.input("module", sql.VarChar, module || "All");
   request.input("type", sql.VarChar, type || "All");
-request.input(
-  "from",
-  sql.Date,
-  from && from !== "" ? new Date(from) : null
-);
 
-request.input(
-  "to",
-  sql.Date,
-  to && to !== "" ? new Date(to) : null
-);
+  request.input("from", sql.Date, from ? new Date(from) : null);
+  request.input("to", sql.Date, to ? new Date(to) : null);
 
   const result = await request.query(`
   
@@ -55,7 +47,7 @@ AND
 (
     @module = 'All'
     OR at_module = @module
-OR at_table_name = @module
+    OR at_table_name = @module
 )
 AND
 (
@@ -64,15 +56,16 @@ AND
 )
 AND
 (
-    (@from IS NULL AND @to IS NULL)
-    OR (at_datetime >= @from AND at_datetime < DATEADD(day,1,@to))
+  (@from IS NULL OR at_datetime >= @from)
+  AND
+  (@to IS NULL OR at_datetime < DATEADD(day,1,@to))
 )
 ORDER BY at_datetime DESC
+
   `);
 
   return result.recordset;
 };
-
 module.exports = {
   getAuditLogs
 };

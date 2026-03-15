@@ -22,21 +22,36 @@ const normalize = (v) => {
    AUDIT LOGGER
 ===================================================== */
 const logAudit = async (transaction, data) => {
+	  console.log("AUDIT INPUT:", data);
 
-  await transaction.request()
-    .input("table_name", sql.VarChar(100), data.table)
-    .input("record_id", sql.VarChar(100), data.recordId)
-    .input("transaction", sql.VarChar(200), data.transaction)
-    .input("transaction_type", sql.VarChar(20), data.type)
-    .input("old_value", sql.NVarChar(sql.MAX), safeString(data.oldValue))
-    .input("new_value", sql.NVarChar(sql.MAX), safeString(data.newValue))
-    .input("module", sql.VarChar(100), "CUSTOM_FORM_MANAGEMENT")
-    .input("username", sql.VarChar(100), data.username || "SYSTEM")
-    .input("pc_name", sql.VarChar(100), data.pcName || "UNKNOWN")
-    .execute("sp_insert_audit");
+  const tableName = String(data.table || "UNKNOWN");
+
+const recordId =
+  data.recordId !== undefined && data.recordId !== null
+    ? String(data.recordId)
+    : null;
+
+  const transactionName = String(data.transaction || "UNKNOWN");
+  const transactionType = String(data.type || "UNKNOWN");
+  const username = String(data.username || "SYSTEM");
+  const pcName = String(data.pcName || "UNKNOWN");
+
+
+await transaction.request()
+  .input("table_name", sql.VarChar(100), tableName)
+.input("record_id", sql.VarChar(100), recordId)
+  .input("transaction", sql.VarChar(200), transactionName)
+  .input("transaction_type", sql.VarChar(20), transactionType)
+  .input("old_value", sql.NVarChar(sql.MAX), data.oldValue ? String(data.oldValue) : null)
+  .input("new_value", sql.NVarChar(sql.MAX), data.newValue ? String(data.newValue) : null)
+  .input("module", sql.VarChar(100), "CUSTOM_FORM_MANAGEMENT")
+  .input("username", sql.VarChar(100), username)
+  .input("pc_name", sql.VarChar(100), pcName)
+  .execute("sp_insert_audit");
 
 };
 
+exports.logAudit = logAudit;
 
 
 /* =========================
@@ -208,14 +223,15 @@ exports.createPatientForm = async (data, currentUser) => {
 
     /* AUDIT INSERT */
 
-    await logAudit(transaction, {
-      table: "PatientCustomForms",
-      recordId: newFormId,
-      transaction: "Create Patient Custom Form",
-      type: "ADD",
-      newValue: data.template_id,
-      username: createdBy
-    });
+  await logAudit(transaction, {
+  table: "PatientCustomForms",
+  recordId: newFormId,
+  transaction: "Create Patient Custom Form",
+  type: "ADD",
+  newValue: data.template_id,
+  username: createdBy,
+  pcName: "WEB"
+});
 
     await transaction.commit();
 

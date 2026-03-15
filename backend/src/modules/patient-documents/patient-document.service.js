@@ -1,12 +1,46 @@
 const sql = require("mssql");
 
+/* =====================================================
+   SAFE STRING FOR AUDIT VALUES
+===================================================== */
+const safeString = (val) => {
+  if (val === undefined || val === null) return null;
+  return String(val);
+};
+
+/* =====================================================
+   AUDIT LOGGER
+===================================================== */
+const logAudit = async (transaction, data) => {
+
+  await transaction.request()
+    .input("table_name", sql.VarChar(100), data.table)
+    .input("record_id", sql.VarChar(100), String(data.recordId || "0"))
+    .input("transaction", sql.VarChar(200), data.transaction)
+    .input("transaction_type", sql.VarChar(20), data.type)
+    .input("old_value", sql.NVarChar(sql.MAX), safeString(data.oldValue))
+    .input("new_value", sql.NVarChar(sql.MAX), safeString(data.newValue))
+    .input("module", sql.VarChar(100), "PATIENT_DOCUMENTS")
+   .input("username", sql.VarChar(100), String(data.username || "SYSTEM"))
+    .input("pc_name", sql.VarChar(100), data.pcName || "UNKNOWN")
+    .execute("sp_insert_audit");
+
+};
+
+
+/* =====================================================
+   CREATE DOCUMENT
+===================================================== */
 const createDocument = async (data) => {
 
   try {
 
     const pool = await sql.connect();
+    const transaction = pool.transaction();
 
-    const result = await pool.request()
+    await transaction.begin();
+
+    const result = await transaction.request()
       .input("registryTrackingNo", sql.Int, data.registryTrackingNo)
       .input("recordName", sql.VarChar(255), data.recordName)
       .input("fileName", sql.VarChar(255), data.fileName)
@@ -25,6 +59,7 @@ const createDocument = async (data) => {
           FileSize,
           CreatedBy
         )
+        OUTPUT INSERTED.DocumentID
         VALUES
         (
           @registryTrackingNo,
@@ -36,6 +71,28 @@ const createDocument = async (data) => {
           @createdBy
         )
       `);
+
+    const documentId = result.recordset[0].DocumentID;
+
+    /* =====================================================
+       AUDIT: CREATE DOCUMENT
+    ===================================================== */
+    await logAudit(transaction,{
+      table: "PatientDocuments",
+      recordId: documentId,
+      transaction: "Upload Patient Document",
+      type: "ADD",
+      newValue: JSON.stringify({
+        recordName: data.recordName,
+        fileName: data.fileName,
+        fileType: data.fileType,
+        fileSize: data.fileSize
+      }),
+      username: String(data.createdBy),
+      pcName: data.pcName
+    });
+
+    await transaction.commit();
 
     return result;
 
@@ -49,6 +106,9 @@ const createDocument = async (data) => {
 };
 
 
+/* =====================================================
+   GET DOCUMENTS
+===================================================== */
 const getDocuments = async (registryTrackingNo) => {
 
   try {
@@ -88,13 +148,27 @@ ORDER BY d.CreatedAt DESC
 };
 
 
+/* =====================================================
+   DELETE DOCUMENT
+===================================================== */
 const deleteDocument = async (documentId, userId) => {
 
   try {
 
     const pool = await sql.connect();
+    const transaction = pool.transaction();
 
-    const result = await pool.request()
+    await transaction.begin();
+
+    const oldDoc = await transaction.request()
+      .input("documentId", sql.Int, documentId)
+      .query(`
+        SELECT RecordName, FileName
+        FROM PatientDocuments
+        WHERE DocumentID = @documentId
+      `);
+
+    const result = await transaction.request()
       .input("documentId", sql.Int, documentId)
       .input("userId", sql.Int, userId)
       .query(`
@@ -105,6 +179,20 @@ const deleteDocument = async (documentId, userId) => {
           DeletedAt = GETDATE()
         WHERE DocumentID = @documentId
       `);
+
+    /* =====================================================
+       AUDIT: DELETE DOCUMENT
+    ===================================================== */
+    await logAudit(transaction,{
+      table: "PatientDocuments",
+      recordId: documentId,
+      transaction: "Delete Patient Document",
+      type: "DELETE",
+      oldValue: JSON.stringify(oldDoc.recordset[0]),
+      username: String(userId)
+    });
+
+    await transaction.commit();
 
     return result;
 

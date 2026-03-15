@@ -18,7 +18,6 @@ interface AuditLog {
   at_old_value: string;
   at_new_value: string;
   at_module: string;
-  at_pc_name: string;
   at_field: string;
 }
 
@@ -210,7 +209,9 @@ const formatDateTime = (value?: string) => {
       <option value="CustomFormTemplates">Custom Forms</option>
       <option value="departments">Department</option>
       <option value="NoteTemplates">Note Templates</option>
-	   <option value="NoteTemplates">Progress Notes</option>
+	   <option value="ProgressNotes">Progress Notes</option>
+	   <option value="PatientDocuments">Patient Documents</option>
+	   <option value="PatientCustomForms">Patient Forms</option>
     </select>
 
     <select
@@ -278,9 +279,6 @@ const formatDateTime = (value?: string) => {
                 New Value
               </th>
 
-              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                PC Name
-              </th>
 
             </tr>
 
@@ -377,20 +375,7 @@ const formatDateTime = (value?: string) => {
 
                 </td>
 
-                <td className="px-6 py-5">
-
-                  <div className="flex items-center gap-2">
-
-                    <Monitor size={12} className="text-slate-300" />
-
-                    <span className="text-[10px] font-bold text-slate-500 uppercase">
-                      {log.at_pc_name || "UNKNOWN"}
-                    </span>
-
-                  </div>
-
-                </td>
-
+      
               </tr>
 
             ))}

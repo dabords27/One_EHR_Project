@@ -37,25 +37,14 @@ exports.createTemplate = async (req, res) => {
 
     const pool = req.app.locals.pool;
 
-    const result = await templateService.createTemplate(
-      pool,
-      req.body
-    );
-
-    const username = req.user?.username || "SYSTEM";
-
-    // 🔥 AUDIT CREATE
-    await logAudit(
-      pool.request(),
-      {
-        table: "CustomFormTemplates",
-        recordId: result.template_id,
-        transaction: "Create Template",
-        type: "ADD",
-        newValue: req.body.template_name,
-        username
-      }
-    );
+  const result = await templateService.createTemplate(
+  pool,
+{
+  ...req.body,
+  created_by: req.user?.id || 1,
+  username: req.user?.username || "SYSTEM"
+}
+);
 
     res.json(result);
 
@@ -70,7 +59,6 @@ exports.createTemplate = async (req, res) => {
 
   }
 };
-
 
 /* =====================================================
    UPLOAD TEMPLATE PAGE
@@ -117,22 +105,24 @@ exports.getTemplates = async (req, res) => {
   try {
 
     const pool = req.app.locals.pool;
-    const { department_id } = req.query;
+    const { dept_code} = req.query;
 
     const request = pool.request();
 
-    let query = `
-      SELECT DISTINCT t.*
-      FROM dbo.CustomFormTemplates t
-      LEFT JOIN dbo.CustomFormTemplateDepartments td
-        ON t.template_id = td.template_id
-      WHERE t.is_active = 1
-    `;
+let query = `
+  SELECT DISTINCT t.*
+  FROM dbo.CustomFormTemplates t
+  LEFT JOIN dbo.CustomFormTemplateDepartments td
+    ON t.template_id = td.template_id
+  LEFT JOIN dbo.departments d
+    ON td.department_id = d.auto_id
+  WHERE t.is_active = 1
+`;
 
-    if (department_id) {
-      request.input("department_id", sql.Int, department_id);
-      query += ` AND td.department_id = @department_id`;
-    }
+if (dept_code) {
+  request.input("dept_code", sql.VarChar(50), dept_code);
+  query += ` AND d.dept_code = @dept_code`;
+}
 
     const result = await request.query(query);
 
@@ -222,39 +212,55 @@ exports.updateTemplate = async (req, res) => {
         `);
 
 
-      /* INSERT NEW DEPARTMENTS */
-      if (department_ids && department_ids.length > 0) {
+/* INSERT NEW DEPARTMENTS */
+if (department_ids && department_ids.length > 0) {
 
-        for (const deptId of department_ids) {
+  for (const deptId of department_ids) {
 
-          await new sql.Request(transaction)
-            .input("template_id", sql.Int, id)
-            .input("department_id", sql.Int, deptId)
-            .input("created_by", sql.Int, updatedBy)
-            .query(`
-              INSERT INTO dbo.CustomFormTemplateDepartments
-              (template_id, department_id, created_by)
-              VALUES
-              (@template_id, @department_id, @created_by)
-            `);
+    await new sql.Request(transaction)
+      .input("template_id", sql.Int, id)
+      .input("department_id", sql.Int, deptId)
+      .input("created_by", sql.Int, updatedBy)
+      .query(`
+        INSERT INTO dbo.CustomFormTemplateDepartments
+        (template_id, department_id, created_by)
+        VALUES
+        (@template_id, @department_id, @created_by)
+      `);
 
-        }
+  }
 
-        /* AUDIT DEPARTMENT CHANGE */
-        await logAudit(
-          new sql.Request(transaction),
-          {
-            table: "CustomFormTemplateDepartments",
-            recordId: id,
-            transaction: "Update Template Departments",
-            type: "UPDATE",
-            newValue: department_ids.join(","),
-            username
-          }
-        );
+  const request = new sql.Request(transaction);
 
-      }
+  department_ids.forEach((deptId, index) => {
+    request.input(`dept${index}`, sql.Int, deptId);
+  });
 
+  const inClause = department_ids.map((_, i) => `@dept${i}`).join(",");
+
+  const deptNamesResult = await request.query(`
+    SELECT dept_name
+    FROM dbo.departments
+    WHERE auto_id IN (${inClause})
+  `);
+
+  const deptNames = deptNamesResult.recordset
+    .map(d => d.dept_name)
+    .join(", ");
+
+  await logAudit(
+    new sql.Request(transaction),
+    {
+      table: "CustomFormTemplateDepartments",
+      recordId: id,
+      transaction: "Update Template Departments",
+      type: "UPDATE",
+      newValue: deptNames,
+      username
+    }
+  );
+
+}
 
       /* FIELD AUDITS */
 
@@ -354,9 +360,9 @@ exports.getTemplateDepartments = async (req, res) => {
     const result = await pool.request()
       .input("template_id", id)
       .query(`
-        SELECT department_id
-        FROM dbo.CustomFormTemplateDepartments
-        WHERE template_id = @template_id
+SELECT department_id
+FROM dbo.CustomFormTemplateDepartments
+WHERE template_id = @template_id
       `);
 
     res.json(result.recordset);

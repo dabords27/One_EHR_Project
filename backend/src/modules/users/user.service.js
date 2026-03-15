@@ -205,6 +205,22 @@ VALUES (
 @usr_date_created
 )
 `);
+
+// AUDIT: USER CREATED
+await logAudit(transaction,{
+  table: "users",
+  recordId: usr_username,
+  transaction: "Create User",
+  type: "ADD",
+  newValue: JSON.stringify({
+    username: usr_username,
+    name: `${usr_last_name}, ${usr_first_name}`,
+    group: fk_usr_group_code,
+    type: fk_usr_type_code
+  }),
+  username: createdBy,
+  pcName: pc_name
+});
     for (const deptCode of departments) {
 
       await transaction.request()
