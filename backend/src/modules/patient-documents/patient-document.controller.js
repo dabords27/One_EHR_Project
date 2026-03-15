@@ -1,3 +1,6 @@
+
+
+const sql = require("mssql");
 const service = require("./patient-document.service");
 
 const uploadDocument = async (req, res) => {
@@ -16,12 +19,65 @@ const uploadDocument = async (req, res) => {
       });
     }
 
-    // define variables FIRST
     const caseId = parseInt(req.body.registryTrackingNo);
+    const userId = parseInt(req.body.userId);
     const fileName = file.filename;
 
-    // store relative path
     const filePath = `uploads/patient-documents/${caseId}/${fileName}`;
+
+    /* =========================
+       CONNECT DATABASE
+    ========================= */
+
+    const pool = await sql.connect();
+
+    /* =========================
+       GET PATIENT INFO
+    ========================= */
+
+    const patientResult = await pool.request()
+      .input("registryNo", sql.Int, caseId)
+      .query(`
+        SELECT 
+          RegistryTrackingNo,
+          MRN,
+          Firstname,
+          Middlename,
+          Lastname
+        FROM dbo.PatientRegistry_Local
+        WHERE RegistryTrackingNo = @registryNo
+      `);
+
+    const patient = patientResult.recordset[0] || {};
+
+    const MRN = patient.MRN || "";
+    const caseRegistry = patient.RegistryTrackingNo || "";
+
+    const fullName =
+      `${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
+
+    /* =========================
+       GET USERNAME
+    ========================= */
+
+    const userResult = await pool.request()
+      .input("userId", sql.Int, userId)
+      .query(`
+        SELECT usr_custom_name,usr_username
+        FROM Users
+        WHERE Auto_id = @userId
+      `);
+
+    const rawUsername = userResult.recordset[0]?.usr_username || "SYSTEM";
+
+    const username =
+      rawUsername === "SYSTEM ADMINISTRATOR"
+        ? "ADMIN"
+        : rawUsername;
+
+    /* =========================
+       PREPARE DATA
+    ========================= */
 
     const data = {
       registryTrackingNo: caseId,
@@ -30,7 +86,13 @@ const uploadDocument = async (req, res) => {
       filePath: filePath,
       fileType: file.mimetype,
       fileSize: parseInt(file.size),
-      createdBy: parseInt(req.body.userId)
+      createdBy: userId,
+      username: username,
+      pcName: "WEB",
+
+      MRN: MRN,
+      fullName: fullName,
+      caseId: caseRegistry
     };
 
     await service.createDocument(data);
@@ -93,16 +155,21 @@ const deleteDocument = async (req, res) => {
   try {
 
     const id = req.params.id;
-    const user = req.body.userId;
+    const userId = parseInt(req.body.userId);
 
-    if (!id) {
-      return res.status(400).json({
-        success: false,
-        message: "Document ID is required"
-      });
-    }
+    const pool = await sql.connect();
 
-    await service.deleteDocument(id, user);
+    const userResult = await pool.request()
+      .input("userId", sql.Int, userId)
+      .query(`
+        SELECT usr_custom_name,usr_username
+        FROM Users
+        WHERE Auto_id = @userId
+      `);
+
+    const username = userResult.recordset[0]?.usr_username|| "SYSTEM";
+
+    await service.deleteDocument(id, userId, username);
 
     res.json({
       success: true,

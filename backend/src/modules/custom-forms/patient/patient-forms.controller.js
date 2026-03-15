@@ -19,6 +19,36 @@ exports.saveDraft = async (req, res) => {
   const user_id = req.user.id;
 
   try {
+	  
+	 /* =========================
+       GET PATIENT INFO FOR AUDIT
+    ========================= */
+console.log("PATIENT ID RECEIVED:", patient_id);
+    const patientInfo = await pool.request()
+	
+      .input("patient_id", sql.VarChar(50), String(patient_id))
+      .query(`
+        SELECT 
+		RegistryTrackingNo,
+          MRN,
+          Firstname,
+          Middlename,
+          Lastname,
+          CaseNo
+        FROM dbo.PatientRegistry_Local
+        WHERE RegistryTrackingNo = @patient_id
+   OR CaseNo = @patient_id
+   OR MRN = @patient_id
+      `);
+
+    const patient = patientInfo.recordset[0] || {};
+
+    const MRN = patient.MRN || "";
+    const caseId = patient.RegistryTrackingNo || "";
+
+    const fullName =
+      `${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
+
 
 // EDIT EXISTING DRAFT
 if (patient_form_id) {
@@ -91,16 +121,16 @@ if (patient_form_id) {
 
       const label = fieldLabels[key] || key;
 
-      await logAudit(auditTransaction,{
-        table:"PatientCustomForms",
-        recordId:patient_form_id,
-        transaction:`Update ${label}`,
-        type:"UPDATE",
-        oldValue: oldVal ? String(oldVal) : null,
-        newValue: newVal ? String(newVal) : null,
-        username:String(user_id),
-        pcName:req.ip
-      });
+await logAudit(auditTransaction,{
+  table:"PatientCustomForms",
+  recordId:patient_form_id,
+  transaction:`Update ${label} | MRN:${MRN} | ${fullName} | Case:${caseId}`,
+  type:"UPDATE",
+  oldValue: oldVal ? String(oldVal) : null,
+  newValue: newVal ? String(newVal) : null,
+  username:req.user?.username || "SYSTEM",
+  pcName:req.ip
+});
 
     }
 
@@ -117,7 +147,7 @@ if (patient_form_id) {
 
     // CREATE NEW DRAFT
     const result = await pool.request()
-      .input("patient_id", sql.Int, patient_id)
+      .input("patient_id", sql.VarChar(50), String(patient_id))
       .input("template_id", sql.Int, template_id)
       .input("department_id", sql.Int, department_id)
       .input("template_snapshot", sql.NVarChar(sql.MAX), JSON.stringify(template_snapshot))
@@ -182,16 +212,15 @@ if (patient_form_id) {
 
       const label = fieldLabels[key] || key;
 
-      await logAudit(auditTransaction,{
-        table:"PatientCustomForms",
-        recordId:newId,
-        transaction:`Create ${label}`,
-        type:"ADD",
-        newValue:String(value),
-        username:String(user_id),
-        pcName:req.ip
-      });
-
+await logAudit(auditTransaction,{
+  table:"PatientCustomForms",
+  recordId:newId,
+  transaction:`Create ${label} | MRN:${MRN} | ${fullName} | Case:${caseId}`,
+  type:"ADD",
+  newValue:String(value),
+  username:req.user?.username || "SYSTEM",
+  pcName:req.ip
+});
     }
 
     await auditTransaction.commit();
@@ -221,6 +250,48 @@ exports.finalizeForm = async (req, res) => {
   } = req.body;
 
 const user_id = req.user.id;
+
+/* =========================
+   GET PATIENT INFO FOR AUDIT
+========================= */
+
+const formInfo = await pool.request()
+  .input("form_id", sql.Int, patient_form_id)
+  .query(`
+    SELECT patient_id
+    FROM dbo.PatientCustomForms
+    WHERE patient_form_id = @form_id
+  `);
+  
+const patient_id = formInfo.recordset[0]?.patient_id;
+
+if (!patient_id) {
+  console.warn("No patient_id found for form:", patient_form_id);
+}
+
+const patientInfo = await pool.request()
+  .input("patient_id", sql.VarChar(50), String(patient_id || ""))
+  .query(`
+    SELECT 
+	RegistryTrackingNo,
+      MRN,
+      Firstname,
+      Middlename,
+      Lastname,
+      CaseNo
+    FROM dbo.PatientRegistry_Local
+    WHERE RegistryTrackingNo = @patient_id
+   OR CaseNo = @patient_id
+   OR MRN = @patient_id
+  `);
+
+const patient = patientInfo.recordset[0] || {};
+
+const MRN = patient.MRN || "";
+const caseId = patient.RegistryTrackingNo || "";
+
+const fullName =
+  `${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
 
   try {
 
@@ -253,10 +324,10 @@ const values = Object.values(filled_data)
 await logAudit(auditTransaction,{
   table:"PatientCustomForms",
   recordId:patient_form_id,
-  transaction:"Finalize Patient Form",
+  transaction:`Finalize Patient Form | MRN:${MRN} | ${fullName} | Case:${caseId}`,
   type:"UPDATE",
   newValue:values.join(", "),
-  username:String(user_id),
+  username:req.user?.username || "SYSTEM",
   pcName:req.ip
 });
     await auditTransaction.commit();

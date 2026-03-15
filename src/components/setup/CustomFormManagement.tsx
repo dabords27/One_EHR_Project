@@ -175,13 +175,14 @@ if (statusModal.template) {
 
       const method = isEditMode ? "PUT" : "POST";
 
-      const body = {
-        ...formData,
-        department_ids: selectedDepartments,
-        ...(isEditMode
-          ? { updated_by: verifiedUser.id }
-          : { created_by: verifiedUser.id })
-      };
+const body = {
+  ...formData,
+  department_ids: selectedDepartments,
+  auth_username: verifiedUser.username,
+  ...(isEditMode
+    ? { updated_by: verifiedUser.id }
+    : { created_by: verifiedUser.id })
+};
 
       const res = await fetch(url, {
         method,
@@ -203,10 +204,11 @@ if (statusModal.template) {
     {
       method: "PUT",
       headers: getAuthHeaders(),
-      body: JSON.stringify({
-        is_active: newStatus,
-        updated_by: verifiedUser.id
-      })
+  body: JSON.stringify({
+  is_active: newStatus,
+  updated_by: verifiedUser.id,
+  auth_username: verifiedUser.username
+})
     }
   );
 

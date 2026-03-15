@@ -97,8 +97,30 @@ exports.createNote = async (pool, data) => {
     const transaction = pool.transaction();
 
     try {
+		
+	
 
         await transaction.begin();
+			const patientResult = await transaction.request()
+.input("registryNo", sql.Int, registryNo)
+.query(`
+SELECT
+    RegistryTrackingNo,
+    MRN,
+    Firstname,
+    Middlename,
+    Lastname
+FROM dbo.PatientRegistry_Local
+WHERE RegistryTrackingNo = @registryNo
+`);
+
+const patient = patientResult.recordset[0] || {};
+
+const MRN = patient.MRN || "";
+const caseId = patient.RegistryTrackingNo || "";
+
+const fullName =
+`${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
 
         console.log("Author ID:", authorId);
 
@@ -141,7 +163,7 @@ exports.createNote = async (pool, data) => {
         await logAudit(transaction,{
             table:"ProgressNotes",
             recordId:noteId,
-            transaction:"Create Progress Note",
+            transaction:`Create Progress Note | MRN:${MRN} | ${fullName} | Case:${caseId}`,
             type:"ADD",
             newValue:content,
             username:username,
@@ -172,12 +194,40 @@ exports.updateDraft = async (pool, noteId, data) => {
     const transaction = pool.transaction();
 
     try {
+		
+
 
         await transaction.begin();   // ✅ START TRANSACTION FIRST
+		
+		/* =========================
+   GET PATIENT INFO FOR AUDIT
+========================= */
+
+const patientResult = await transaction.request()
+.input("noteId", sql.Int, noteId)
+.query(`
+SELECT
+    p.RegistryTrackingNo,
+    p.MRN,
+    p.Firstname,
+    p.Middlename,
+    p.Lastname
+FROM dbo.ProgressNotes pn
+JOIN dbo.PatientRegistry_Local p
+    ON pn.RegistryNo = p.RegistryTrackingNo
+WHERE pn.NoteID = @noteId
+`);
+
+const patient = patientResult.recordset[0] || {};
+
+const MRN = patient.MRN || "";
+const caseId = patient.RegistryTrackingNo || "";
+
+const fullName =
+`${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
 
 const noteResult = await transaction.request()
     .input('noteId', sql.Int, noteId)
-    .input('authorId', sql.Int, authorId)
     .query(`
         SELECT 
             pn.AuthorID,
@@ -186,7 +236,7 @@ const noteResult = await transaction.request()
             u.fk_usr_type_code
         FROM dbo.ProgressNotes pn
         JOIN dbo.users u 
-            ON u.auto_id = @authorId
+            ON u.auto_id = pn.AuthorID
         WHERE pn.NoteID = @noteId
     `);
 
@@ -222,7 +272,7 @@ await transaction.request()
 await logAudit(transaction,{
     table:"ProgressNotes",
     recordId:noteId,
-    transaction:"Update Progress Note",
+    transaction:`Update Progress Note | MRN:${MRN} | ${fullName} | Case:${caseId}`,
     type:"UPDATE",
     oldValue:note.Content,
     newValue:content,
@@ -254,8 +304,36 @@ exports.finalizeNote = async (pool, noteId, data) => {
     const transaction = pool.transaction();
 
     try {
+		
+
 
         await transaction.begin();
+		/* =========================
+   GET PATIENT INFO FOR AUDIT
+========================= */
+
+const patientResult = await transaction.request()
+.input("noteId", sql.Int, noteId)
+.query(`
+SELECT
+    p.RegistryTrackingNo,
+    p.MRN,
+    p.Firstname,
+    p.Middlename,
+    p.Lastname
+FROM dbo.ProgressNotes pn
+JOIN dbo.PatientRegistry_Local p
+    ON pn.RegistryNo = p.RegistryTrackingNo
+WHERE pn.NoteID = @noteId
+`);
+
+const patient = patientResult.recordset[0] || {};
+
+const MRN = patient.MRN || "";
+const caseId = patient.RegistryTrackingNo || "";
+
+const fullName =
+`${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
 
     const noteResult = await transaction.request()
         .input('noteId', sql.Int, noteId)
@@ -302,7 +380,7 @@ exports.finalizeNote = async (pool, noteId, data) => {
     await logAudit(transaction,{
         table:"ProgressNotes",
         recordId:noteId,
-        transaction:"Finalize Progress Note",
+       transaction:`Finalize Progress Note | MRN:${MRN} | ${fullName} | Case:${caseId}`,
         type:"UPDATE",
         oldValue:"DRAFT",
         newValue:"FINALIZED",
@@ -333,7 +411,35 @@ exports.excludeFromPrint = async (pool, noteId, username, pc_name) => {
 
     try {
 
+
+
         await transaction.begin();
+		/* =========================
+   GET PATIENT INFO FOR AUDIT
+========================= */
+
+const patientResult = await transaction.request()
+.input("noteId", sql.Int, noteId)
+.query(`
+SELECT
+    p.RegistryTrackingNo,
+    p.MRN,
+    p.Firstname,
+    p.Middlename,
+    p.Lastname
+FROM dbo.ProgressNotes pn
+JOIN dbo.PatientRegistry_Local p
+    ON pn.RegistryNo = p.RegistryTrackingNo
+WHERE pn.NoteID = @noteId
+`);
+
+const patient = patientResult.recordset[0] || {};
+
+const MRN = patient.MRN || "";
+const caseId = patient.RegistryTrackingNo || "";
+
+const fullName =
+`${patient.Lastname || ""}, ${patient.Firstname || ""} ${patient.Middlename || ""}`.trim();
 
         await transaction.request()
             .input('noteId', sql.Int, noteId)
@@ -347,7 +453,7 @@ exports.excludeFromPrint = async (pool, noteId, username, pc_name) => {
         await logAudit(transaction,{
             table:"ProgressNotes",
             recordId:noteId,
-            transaction:"Exclude Progress Note From Print",
+            transaction:`Exclude Progress Note From Print | MRN:${MRN} | ${fullName} | Case:${caseId}`,
             type:"UPDATE",
             oldValue:"0",
             newValue:"1",

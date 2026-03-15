@@ -373,14 +373,14 @@ const handleSaveDraft = async () => {
 
   const token = localStorage.getItem("token");
 
-  const payload = {
-    patient_form_id: formId,
-    patient_id: patient.case_id,
-    template_id: template.template_id,
-    department_id: department?.department_id || 1,
-    template_snapshot: runtimeTemplate,
-    filled_data: formData
-  };
+const payload = {
+  patient_form_id: formId,
+ patient_id: systemData.RegistryTrackingNo,
+  template_id: template.template_id,
+  department_id: department?.department_id || 1,
+  template_snapshot: runtimeTemplate,
+  filled_data: formData
+};
 
   const res = await fetch(
     `${API_BASE}/api/custom-forms/patient-form/draft`,

@@ -113,7 +113,7 @@ exports.createDepartment = async (pool, data, currentUser) => {
     await logAudit(transaction, {
       table: "departments",
       recordId: String(newId),
-      transaction: "Create Department",
+     transaction: `Create Department - ${data.dept_name}`,
       type: "ADD",
       newValue: data.dept_name,
       username: createdBy
@@ -155,6 +155,7 @@ exports.updateDepartment = async (pool, id, data, currentUser) => {
     const oldData = oldResult.recordset[0];
 
     /* FIELD CHANGE AUDIT */
+	  const deptName = oldData.dept_name;
     for (const field of Object.keys(FIELD_LABELS)) {
 
       let oldVal = oldData[field];
@@ -169,13 +170,14 @@ exports.updateDepartment = async (pool, id, data, currentUser) => {
 
       const oldNorm = normalize(oldVal);
       const newNorm = normalize(newVal);
+	
 
       if (oldNorm === newNorm) continue;
 
       await logAudit(transaction, {
         table: "departments",
         recordId: String(id),
-        transaction: `Update ${FIELD_LABELS[field]}`,
+        transaction: `Update ${FIELD_LABELS[field]} - ${deptName}`,
         type: "UPDATE",
         oldValue: oldNorm,
         newValue: newNorm,

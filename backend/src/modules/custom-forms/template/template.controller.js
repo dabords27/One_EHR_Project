@@ -42,7 +42,7 @@ exports.createTemplate = async (req, res) => {
 {
   ...req.body,
   created_by: req.user?.id || 1,
-  username: req.user?.username || "SYSTEM"
+ username: req.body.auth_username || req.user?.username || "SYSTEM"
 }
 );
 
@@ -116,7 +116,7 @@ let query = `
     ON t.template_id = td.template_id
   LEFT JOIN dbo.departments d
     ON td.department_id = d.auto_id
-  WHERE t.is_active = 1
+
 `;
 
 if (dept_code) {
@@ -169,7 +169,7 @@ exports.updateTemplate = async (req, res) => {
 
     try {
 
-      const username = req.user?.username || "SYSTEM";
+     const username = req.body.auth_username || req.user?.username || "SYSTEM";
 
       /* GET OLD VALUES */
       const oldTemplate = await new sql.Request(transaction)
@@ -253,7 +253,7 @@ if (department_ids && department_ids.length > 0) {
     {
       table: "CustomFormTemplateDepartments",
       recordId: id,
-      transaction: "Update Template Departments",
+      transaction: `Update Template Departments - ${template_name}`,
       type: "UPDATE",
       newValue: deptNames,
       username
@@ -269,7 +269,7 @@ if (department_ids && department_ids.length > 0) {
         await logAudit(new sql.Request(transaction), {
           table: "CustomFormTemplates",
           recordId: id,
-          transaction: "Update Template Name",
+         transaction: `Update Template Name - ${template_name}`,
           type: "UPDATE",
           oldValue: oldData.template_name,
           newValue: template_name,
@@ -283,7 +283,7 @@ if (department_ids && department_ids.length > 0) {
         await logAudit(new sql.Request(transaction), {
           table: "CustomFormTemplates",
           recordId: id,
-          transaction: "Update Paper Size",
+          transaction: `Update Paper Size - ${template_name}`,
           type: "UPDATE",
           oldValue: oldData.paper_size,
           newValue: paper_size,
@@ -297,7 +297,7 @@ if (department_ids && department_ids.length > 0) {
         await logAudit(new sql.Request(transaction), {
           table: "CustomFormTemplates",
           recordId: id,
-          transaction: "Update Orientation",
+         transaction: `Update Orientation - ${template_name}`,
           type: "UPDATE",
           oldValue: oldData.orientation,
           newValue: orientation,
@@ -311,7 +311,7 @@ if (department_ids && department_ids.length > 0) {
         await logAudit(new sql.Request(transaction), {
           table: "CustomFormTemplates",
           recordId: id,
-          transaction: "Update Total Pages",
+          transaction: `Update Total Pages - ${template_name}`,
           type: "UPDATE",
           oldValue: oldData.total_pages,
           newValue: total_pages,
@@ -373,6 +373,116 @@ WHERE template_id = @template_id
 
     res.status(500).json({
       message: "Failed to fetch departments"
+    });
+
+  }
+
+};
+
+/* =====================================================
+   CREATE FIELD
+===================================================== */
+exports.createField = async (req, res) => {
+
+  try {
+
+    const pool = req.app.locals.pool;
+
+    const templateId = req.params.templateId;
+
+    const result = await fieldService.createField(
+      pool,
+      templateId,
+      {
+        ...req.body,
+        created_by: req.user?.id || 1,
+        username: req.body.auth_username || req.user?.username || "SYSTEM"
+      }
+    );
+
+    res.json(result);
+
+  } catch (err) {
+
+    console.error(err);
+
+    res.status(500).json({
+      message: "Error creating field",
+      error: err.message
+    });
+
+  }
+
+};
+
+/* =====================================================
+   TOGGLE TEMPLATE STATUS
+===================================================== */
+exports.toggleTemplateStatus = async (req, res) => {
+
+  const sql = require("mssql");
+
+  try {
+
+    const { id } = req.params;
+    const { is_active } = req.body;
+
+    const pool = req.app.locals.pool;
+   const username = req.body.auth_username || req.user?.username || "SYSTEM";
+
+    const transaction = new sql.Transaction(pool);
+
+    await transaction.begin();
+
+    /* GET OLD STATUS */
+    const oldResult = await new sql.Request(transaction)
+      .input("id", sql.Int, id)
+      .query(`
+        SELECT template_name, is_active
+        FROM dbo.CustomFormTemplates
+        WHERE template_id = @id
+      `);
+
+    const oldData = oldResult.recordset[0];
+
+    const templateName = oldData.template_name;
+    const oldStatus = oldData.is_active ? "ACTIVE" : "INACTIVE";
+    const newStatus = is_active ? "ACTIVE" : "INACTIVE";
+
+    /* UPDATE STATUS */
+    await new sql.Request(transaction)
+      .input("id", sql.Int, id)
+      .input("is_active", sql.Bit, is_active)
+      .input("updated_by", sql.Int, req.user.id)
+      .query(`
+        UPDATE dbo.CustomFormTemplates
+        SET is_active = @is_active,
+            updated_by = @updated_by,
+            date_updated = GETDATE()
+        WHERE template_id = @id
+      `);
+
+    /* AUDIT */
+    await logAudit(new sql.Request(transaction), {
+      table: "CustomFormTemplates",
+      recordId: id,
+      transaction: `Update Template Status - ${templateName}`,
+      type: "UPDATE",
+      oldValue: oldStatus,
+      newValue: newStatus,
+      username
+    });
+
+    await transaction.commit();
+
+    res.json({ success: true });
+
+  } catch (err) {
+
+    console.error("STATUS UPDATE ERROR:", err);
+
+    res.status(500).json({
+      message: "Status update failed"
     });
 
   }

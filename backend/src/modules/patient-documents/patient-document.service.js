@@ -82,13 +82,8 @@ const createDocument = async (data) => {
       recordId: documentId,
       transaction: "Upload Patient Document",
       type: "ADD",
-      newValue: JSON.stringify({
-        recordName: data.recordName,
-        fileName: data.fileName,
-        fileType: data.fileType,
-        fileSize: data.fileSize
-      }),
-      username: String(data.createdBy),
+    newValue: `Record Name : ${data.recordName}`,
+      username: data.username,
       pcName: data.pcName
     });
 
@@ -151,7 +146,7 @@ ORDER BY d.CreatedAt DESC
 /* =====================================================
    DELETE DOCUMENT
 ===================================================== */
-const deleteDocument = async (documentId, userId) => {
+const deleteDocument = async (documentId, userId, username) => {
 
   try {
 
@@ -180,17 +175,18 @@ const deleteDocument = async (documentId, userId) => {
         WHERE DocumentID = @documentId
       `);
 
-    /* =====================================================
-       AUDIT: DELETE DOCUMENT
-    ===================================================== */
-    await logAudit(transaction,{
-      table: "PatientDocuments",
-      recordId: documentId,
-      transaction: "Delete Patient Document",
-      type: "DELETE",
-      oldValue: JSON.stringify(oldDoc.recordset[0]),
-      username: String(userId)
-    });
+/* =====================================================
+   AUDIT: DELETE DOCUMENT
+===================================================== */
+await logAudit(transaction,{
+  table: "PatientDocuments",
+  recordId: documentId,
+  transaction: "Delete Patient Document",
+  type: "DELETE",
+  oldValue: `Record Name : ${oldDoc.recordset[0]?.RecordName || ""}`,
+  username: username,
+  pcName: "WEB"
+});
 
     await transaction.commit();
 

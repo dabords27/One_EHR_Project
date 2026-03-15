@@ -32,6 +32,13 @@ export const PatientDocumentsModule: React.FC<Props> = ({
   const [documents, setDocuments] = useState<any[]>([]);
   const [recordName, setRecordName] = useState("");
   const [file, setFile] = useState<File | null>(null);
+  const [fileInputKey, setFileInputKey] = useState(Date.now());
+  
+  const recordNameExists = documents.some(
+  (d) =>
+    d.RecordName?.toLowerCase().trim() ===
+    recordName.toLowerCase().trim()
+);
 
   const [search, setSearch] = useState("");
 const [showDateFilter, setShowDateFilter] = useState(false);
@@ -126,6 +133,7 @@ const [dateTo, setDateTo] = useState("");
 
         setRecordName("");
         setFile(null);
+		setFileInputKey(Date.now()); 
 
         setTxStatus("success");
         setTxMsg("Document uploaded.");
@@ -419,19 +427,20 @@ const filtered = (documents || []).filter((d) => {
       className="flex-1 border rounded-lg px-3 py-2 text-sm min-w-[140px]"
     />
 
-    <input
-      type="file"
-      accept=".pdf,.jpg,.jpeg,.png"
-      onChange={(e) => setFile(e.target.files?.[0] || null)}
-      className="text-xs w-[170px]"
-    />
+<input
+  key={fileInputKey}
+  type="file"
+  accept=".pdf,.jpg,.jpeg,.png"
+  onChange={(e) => setFile(e.target.files?.[0] || null)}
+  className="text-xs w-[170px]"
+/>
 
     <button
-      disabled={!recordName.trim() || !file}
+      disabled={!recordName.trim() || !file || recordNameExists}
       onClick={handleUpload}
       className={`px-3 py-2 rounded-lg text-sm flex items-center gap-2
       ${
-        !recordName.trim() || !file
+        !recordName.trim() || !file || recordNameExists
           ? "bg-slate-300 text-slate-500 cursor-not-allowed"
           : "bg-slate-900 text-white hover:bg-slate-700"
       }`}
@@ -439,6 +448,12 @@ const filtered = (documents || []).filter((d) => {
       <Upload size={16} />
       Upload
     </button>
+	
+	{recordNameExists && (
+  <p className="text-red-500 text-xs mt-1 font-semibold">
+    Record name has already been taken for this patient.
+  </p>
+)}
 
   </div>
 

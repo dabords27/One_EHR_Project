@@ -141,7 +141,7 @@ exports.createTemplate = async (req, res) => {
     await logAudit(transaction,{
       table:"NoteTemplates",
       recordId:newId,
-      transaction:"Create Template",
+    transaction:`Create Template - ${name}`,
       type:"ADD",
       newValue:name,
       username:createdBy
@@ -207,6 +207,7 @@ exports.updateTemplate = async (req, res) => {
     const oldData = oldResult.recordset[0];
 
     /* FIELD CHANGE AUDIT */
+	const templateName = oldData.Name;
     for (const field of Object.keys(FIELD_LABELS)) {
 
       const oldVal = normalize(oldData[field]);
@@ -222,7 +223,7 @@ exports.updateTemplate = async (req, res) => {
       await logAudit(transaction,{
         table:"NoteTemplates",
         recordId:id,
-        transaction:`Update ${FIELD_LABELS[field]}`,
+ transaction:`Update ${FIELD_LABELS[field]} - ${templateName}`,
         type:"UPDATE",
         oldValue:oldVal,
         newValue:newVal,
@@ -296,6 +297,16 @@ exports.deleteTemplate = async (req, res) => {
 
     }
 
+const templateLookup = await transaction.request()
+  .input('Id', sql.UniqueIdentifier, id)
+  .query(`
+    SELECT Name
+    FROM dbo.NoteTemplates
+    WHERE Id = @Id
+  `);
+
+const templateName = templateLookup.recordset[0]?.Name || "UNKNOWN";
+
     await transaction.request()
       .input('Id', sql.UniqueIdentifier, id)
       .input('ModifiedBy', sql.NVarChar, updatedBy)
@@ -311,7 +322,7 @@ exports.deleteTemplate = async (req, res) => {
     await logAudit(transaction,{
       table:"NoteTemplates",
       recordId:id,
-      transaction:"Delete Template",
+      transaction:`Delete Template - ${templateName}`,
       type:"DELETE",
       oldValue:"ACTIVE",
       newValue:"INACTIVE",

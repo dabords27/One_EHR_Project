@@ -1,4 +1,5 @@
 const express = require("express");
+const sql = require("mssql");
 const router = express.Router();
 const templateController = require("./template/template.controller");
 const fieldController = require("./template/field.controller");
@@ -45,7 +46,17 @@ router.post("/template", verifyToken, templateController.createTemplate);
 router.put("/template/:id", verifyToken, templateController.updateTemplate);
 router.get("/template/:id/departments", verifyToken, templateController.getTemplateDepartments);
 router.get("/patient/:registryId", patientController.getPatientRegistry);
+router.post(
+  "/templates/:templateId/fields",
+  verifyToken,
+  fieldController.createField
+);
 
+router.put(
+  "/template/:id/status",
+  verifyToken,
+  templateController.toggleTemplateStatus
+);
 // ============================
 // FIELD ROUTES
 // ============================
@@ -65,40 +76,6 @@ router.post(
   upload.single("pdf"),
   templateController.uploadTemplatePage
 );
-
-// ============================
-// TOGGLE
-// ============================
-
-router.put("/template/:id/status", verifyToken, async (req, res) => {
-  const { id } = req.params;
-  const { is_active, updated_by } = req.body;
-
-  const pool = req.app.locals.pool;
-  const sql = require("mssql");
-
-  try {
-    await pool.request()
-      .input("id", sql.Int, id)
-      .input("is_active", sql.Bit, is_active)
-      .input("updated_by", sql.Int, updated_by)
-      .query(`
-        UPDATE dbo.CustomFormTemplates
-        SET is_active = @is_active,
-            updated_by = @updated_by,
-            date_updated = GETDATE()
-        WHERE template_id = @id
-      `);
-
-    res.json({ success: true });
-
-  } catch (err) {
-    console.error("STATUS UPDATE ERROR:", err);
-    res.status(500).json({ message: "Status update failed" });
-  }
-});
-
-
 
 // ============================
 // PATIENT FORMS

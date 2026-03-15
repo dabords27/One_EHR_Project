@@ -167,7 +167,7 @@ const deptResult = await request.query(`
     await logAudit(transaction,{
       table:"CustomFormTemplates",
       recordId:templateId,
-      transaction:"Create Template",
+     transaction:`Create Template - ${template_name}`,
       type:"ADD",
       newValue: `${template_name} | Departments: ${deptNames}`,
       username:username,
@@ -361,20 +361,31 @@ exports.createField = async (pool, templateId, data) => {
         )
       `);
 
-    const fieldId = result.recordset[0]?.field_id;
+const fieldId = result.recordset[0]?.field_id;
 
-    console.log("NEW FIELD ID:", fieldId);
+console.log("NEW FIELD ID:", fieldId);
 
-    await logAudit(transaction,{
-      table:"CustomFormTemplateFields",
-      recordId:fieldId,
-      transaction:"Create Template Field",
-      type:"ADD",
-      newValue:`${label} (${field_type})`,
-      username:data.username,
-      pcName:"WEB"
-    });
+/* GET TEMPLATE NAME FOR AUDIT */
+const templateLookup = await transaction.request()
+  .input("template_id", sql.Int, templateId)
+  .query(`
+    SELECT template_name
+    FROM CustomFormTemplates
+    WHERE template_id = @template_id
+  `);
 
+const templateName = templateLookup.recordset[0]?.template_name || "UNKNOWN";
+
+/* AUDIT */
+await logAudit(transaction,{
+  table:"CustomFormTemplateFields",
+  recordId:fieldId,
+transaction:`Create Field - ${label} [${templateName}]`,
+  type:"ADD",
+  newValue:`${label} (${field_type})`,
+  username:data.username,
+  pcName:"WEB"
+});
     await transaction.commit();
 
     return result.recordset[0];

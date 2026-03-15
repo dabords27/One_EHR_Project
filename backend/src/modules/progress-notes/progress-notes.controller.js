@@ -2,85 +2,150 @@ const service = require('./progress-notes.service');
 
 // ================= GET NOTES =================
 exports.getNotesByRegistry = async (req, res) => {
-    try {
-        const registryNo = parseInt(req.params.registryNo);
+  try {
 
-        if (isNaN(registryNo)) {
-            return res.status(400).json({ message: 'Invalid Registry Number.' });
-        }
+    const registryNo = parseInt(req.params.registryNo);
 
-        const pool = req.app.locals.pool;
-        const notes = await service.getNotesByRegistry(pool, registryNo);
-
-        res.json(notes);
-    } catch (error) {
-        console.error('GET Progress Notes Error:', error);
-        res.status(500).json({ message: 'Failed to fetch progress notes.' });
+    if (isNaN(registryNo)) {
+      return res.status(400).json({ message: 'Invalid Registry Number.' });
     }
+
+    const pool = req.app.locals.pool;
+    const notes = await service.getNotesByRegistry(pool, registryNo);
+
+    res.json(notes);
+
+  } catch (error) {
+
+    console.error('GET Progress Notes Error:', error);
+    res.status(500).json({ message: 'Failed to fetch progress notes.' });
+
+  }
 };
+
 
 // ================= CREATE NOTE =================
 exports.createNote = async (req, res) => {
-    try {
-        const pool = req.app.locals.pool;
-        const result = await service.createNote(pool, req.body);
-        res.status(201).json(result);
-    } catch (error) {
-        console.error('CREATE Progress Note Error:', error);
-        res.status(400).json({ message: error.message });
-    }
+
+  const pool = req.app.locals.pool;
+
+  try {
+
+    const { registryNo, mrn, content, status } = req.body;
+
+    const result = await service.createNote(pool,{
+      registryNo,
+      mrn,
+      content,
+      status,
+      authorId: req.user.id,
+      username: req.body.signedBy || req.user?.username,
+      pc_name: req.ip
+    });
+
+    res.json(result);
+
+  } catch (err) {
+
+    console.error("CREATE NOTE ERROR:", err);
+    res.status(500).json({ message: err.message });
+
+  }
+
 };
+
 
 // ================= UPDATE DRAFT =================
 exports.updateDraft = async (req, res) => {
-    try {
-        const noteId = parseInt(req.params.noteId);
-        if (isNaN(noteId)) {
-            return res.status(400).json({ message: 'Invalid Note ID.' });
-        }
 
-        const pool = req.app.locals.pool;
-        const result = await service.updateDraft(pool, noteId, req.body);
+  try {
 
-        res.json(result);
-    } catch (error) {
-        console.error('UPDATE Draft Error:', error);
-        res.status(400).json({ message: error.message });
+    const noteId = parseInt(req.params.noteId);
+
+    if (isNaN(noteId)) {
+      return res.status(400).json({ message: 'Invalid Note ID.' });
     }
+
+    const pool = req.app.locals.pool;
+
+    const result = await service.updateDraft(pool, noteId, {
+      content: req.body.content,
+      authorId: req.user?.id,
+      username: req.body.signedBy || req.user?.username,
+      pc_name: req.ip
+    });
+
+    res.json(result);
+
+  } catch (error) {
+
+    console.error('UPDATE Draft Error:', error);
+    res.status(400).json({ message: error.message });
+
+  }
+
 };
+
 
 // ================= FINALIZE =================
 exports.finalizeNote = async (req, res) => {
-    try {
-        const noteId = parseInt(req.params.noteId);
-        if (isNaN(noteId)) {
-            return res.status(400).json({ message: 'Invalid Note ID.' });
-        }
 
-        const pool = req.app.locals.pool;
-        const result = await service.finalizeNote(pool, noteId, req.body);
+  try {
 
-        res.json(result);
-    } catch (error) {
-        console.error('FINALIZE Error:', error);
-        res.status(400).json({ message: error.message });
+    const noteId = parseInt(req.params.noteId);
+
+    if (isNaN(noteId)) {
+      return res.status(400).json({ message: 'Invalid Note ID.' });
     }
+
+    const pool = req.app.locals.pool;
+
+    const result = await service.finalizeNote(pool, noteId, {
+      ...req.body,
+      authorId: req.user.id,
+      username: req.body.signedBy || req.user?.username,
+      pc_name: req.ip
+    });
+
+    res.json(result);
+
+  } catch (error) {
+
+    console.error('FINALIZE Error:', error);
+    res.status(400).json({ message: error.message });
+
+  }
+
 };
+
 
 // ================= EXCLUDE =================
 exports.excludeFromPrint = async (req, res) => {
-    try {
-        const noteId = parseInt(req.params.noteId);
-        if (isNaN(noteId)) {
-            return res.status(400).json({ message: 'Invalid Note ID.' });
-        }
 
-        const pool = req.app.locals.pool;
-        const result = await service.excludeFromPrint(pool, noteId);
+  try {
 
-        res.json(result);
-    } catch (error) {
-        console.error('EXCLUDE Error:', error);
-        res.status(400).json({ message: error.message });
+    const noteId = parseInt(req.params.noteId);
+
+    if (isNaN(noteId)) {
+      return res.status(400).json({ message: 'Invalid Note ID.' });
     }
+
+    const pool = req.app.locals.pool;
+
+    const result = await service.excludeFromPrint(
+      pool,
+      noteId,
+      req.body.signedBy || req.user?.username,
+      req.ip
+    );
+
+    res.json(result);
+
+  } catch (error) {
+
+    console.error('EXCLUDE Error:', error);
+    res.status(400).json({ message: error.message });
+
+  }
+
 };

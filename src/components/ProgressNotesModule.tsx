@@ -316,9 +316,10 @@ const triggerSave = (status: "DRAFT" | "FINALIZED") => {
   setPendingStatus(status);
   setShowAuthModal(true);
 };
- const performSave = async (
+const performSave = async (
   status: "DRAFT" | "FINALIZED",
-  verifiedUserId: number
+  verifiedUserId: number,
+  signedBy: string
 ) => {
   try {
     setTxStatus("loading");
@@ -335,10 +336,10 @@ if (editingNoteId) {
       ? `${API}/api/progress-notes/${editingNoteId}/finalize`
       : `${API}/api/progress-notes/${editingNoteId}`;
 
-  const body =
-    status === "FINALIZED"
-      ? { authorId: verifiedUserId }
-      : { content: content.trim(), authorId: verifiedUserId };
+const body =
+  status === "FINALIZED"
+    ? { authorId: verifiedUserId, signedBy }
+    : { content: content.trim(), authorId: verifiedUserId, signedBy };
 
   const res = await fetch(endpoint, {
     method: "PUT",
@@ -362,13 +363,14 @@ if (editingNoteId) {
       "Content-Type": "application/json",
       Authorization: `Bearer ${token}`
     },
-    body: JSON.stringify({
-      registryNo: patient.case_id,
-      mrn: patient.mrn,
-      content,
-      authorId: verifiedUserId,
-      status
-    })
+body: JSON.stringify({
+  registryNo: patient.case_id,
+  mrn: patient.mrn,
+  content,
+  authorId: verifiedUserId,
+  status,
+  signedBy
+})
   });
 
   if (!res.ok) {
@@ -410,9 +412,9 @@ if (editingNoteId) {
 const handleVerified = async (verifiedUser: { id: number; username: string }) => {
   if (!pendingStatus) return;
 
-  await performSave(pendingStatus, verifiedUser.id);
+  await performSave(pendingStatus, verifiedUser.id, verifiedUser.username);
 
-  setShowAuthModal(false); // ✅ close AFTER save
+  setShowAuthModal(false);
 };
   /* ================= FILTER ================= */
 

@@ -2,19 +2,52 @@ const express = require('express');
 const router = express.Router();
 const controller = require('./progress-notes.controller');
 
-// Get notes by RegistryTrackingNo
-router.get('/:registryNo', controller.getNotesByRegistry);
+// AUTH MIDDLEWARE
+const { verifyToken } = require("../../../middleware/auth.middleware");
 
-// Create new note (draft or finalized)
-router.post('/', controller.createNote);
+/* =====================================================
+   GET NOTES BY REGISTRY
+===================================================== */
+router.get(
+  '/:registryNo',
+  verifyToken,
+  controller.getNotesByRegistry
+);
 
-// Update draft (only creator)
-router.put('/:noteId', controller.updateDraft);
+/* =====================================================
+   CREATE NEW NOTE (DRAFT OR FINALIZED)
+===================================================== */
+router.post(
+  '/',
+  verifyToken,
+  controller.createNote
+);
 
-// Finalize note
-router.put('/:noteId/finalize', controller.finalizeNote);
+/* =====================================================
+   UPDATE DRAFT (ONLY CREATOR OR ADMIN)
+===================================================== */
+router.put(
+  '/:noteId',
+  verifyToken,
+  controller.updateDraft
+);
 
-// Exclude finalized note from print
-router.put('/:noteId/exclude', controller.excludeFromPrint);
+/* =====================================================
+   FINALIZE NOTE
+===================================================== */
+router.put(
+  '/:noteId/finalize',
+  verifyToken,
+  controller.finalizeNote
+);
+
+/* =====================================================
+   EXCLUDE NOTE FROM PRINT
+===================================================== */
+router.put(
+  '/:noteId/exclude',
+  verifyToken,
+  controller.excludeFromPrint
+);
 
 module.exports = router;

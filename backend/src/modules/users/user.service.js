@@ -210,7 +210,7 @@ VALUES (
 await logAudit(transaction,{
   table: "users",
   recordId: usr_username,
-  transaction: "Create User",
+ transaction: `Create User - ${usr_username}`,
   type: "ADD",
   newValue: JSON.stringify({
     username: usr_username,
@@ -345,7 +345,7 @@ for (const field of Object.keys(FIELD_LABELS)) {
   await logAudit(transaction, {
     table: "users",
     recordId: username,
-    transaction: `Update ${FIELD_LABELS[field]}`,
+    transaction: `Update ${FIELD_LABELS[field]} - ${username}`,
     type: "UPDATE",
     oldValue: oldNorm,
     newValue: newNorm,
@@ -412,7 +412,7 @@ if(!oldDepartments.includes(String(deptCode))){
 await logAudit(transaction,{
 table:"user_department_access",
 recordId:username,
-transaction:"Add Department Access",
+transaction:`Add Department Access - ${username}`,
 type:"ADD",
 newValue:deptCode,
 username:data.usr_updated_by,
@@ -510,7 +510,7 @@ const updateUserStatus = async (pool, id, status, updatedBy, pc_name) => {
     await logAudit(transaction, {
       table: "users",
       recordId: username,
-      transaction: "Update User Status",
+     transaction: `Update User Status - ${username.toUpperCase()}`,
       type: "UPDATE",
       oldValue: oldUser.recordset[0].usr_status_active ? "ACTIVE" : "INACTIVE",
       newValue: status ? "ACTIVE" : "INACTIVE",
