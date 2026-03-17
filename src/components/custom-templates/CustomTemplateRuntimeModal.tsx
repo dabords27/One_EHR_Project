@@ -125,10 +125,12 @@ useEffect(() => {
       const data = await res.json()
 
 
-
-      if (data) {
-        setSystemData(data)
-      }
+if (data) {
+  setSystemData({
+    ...patient,
+    ...data
+  })
+}
 
     } catch (err) {
 
@@ -144,38 +146,15 @@ useEffect(() => {
 
 }, [patient.case_id])
 
-/* =========================
-   MAP SYSTEM DATA
-========================= */
 
-useEffect(() => {
 
-  if (!systemData) return
-
-  const mapped = {
-    ...systemData,
-
-    gender: systemData.sex,
-    room_bed: systemData.room_no,
-    room_bed_no: systemData.room_no,
-
-    arrival_datetime: systemData.date_admitted,
-    admission_datetime: systemData.date_admitted,
-    admission_date_time: systemData.date_admitted,
-
-    patient_name: `${systemData.last_name}, ${systemData.first_name} ${systemData.middle_name || ""}`
-  }
-
-  setSystemData(mapped)
-
-}, [])
 
 /* =========================
    INITIAL FORM DATA
 ========================= */
 
 useEffect(() => {
-console.log("Runtime initialFormData:", initialFormData);
+
   if (initialFormData) {
     setFormData(initialFormData)
 

@@ -12,6 +12,7 @@ interface Props {
   onChange: (name: string, value: any) => void;
   readOnly?: boolean;
   showValidation?: boolean;
+  forcePrint?: boolean; 
 }
 
 export const CustomTemplateRenderer: React.FC<Props> = ({
@@ -23,19 +24,23 @@ export const CustomTemplateRenderer: React.FC<Props> = ({
   zoom,
   onChange,
   readOnly = false,
-  showValidation = false
+  showValidation = false,
+  forcePrint = false 
 }) => {
+
+  console.log("SYSTEM DATA RECEIVED:", systemData);
 
 /* =====================================
    PRINT MODE DETECTOR
 ===================================== */
 
-const [isPrint, setIsPrint] = React.useState(false);
+const [internalPrint, setInternalPrint] = React.useState(false);
+
+const isPrint = internalPrint || forcePrint; // ✅ THIS IS KEY
 
 React.useEffect(() => {
-
-  const beforePrint = () => setIsPrint(true);
-  const afterPrint = () => setIsPrint(false);
+  const beforePrint = () => setInternalPrint(true);
+  const afterPrint = () => setInternalPrint(false);
 
   window.addEventListener("beforeprint", beforePrint);
   window.addEventListener("afterprint", afterPrint);
@@ -44,8 +49,21 @@ React.useEffect(() => {
     window.removeEventListener("beforeprint", beforePrint);
     window.removeEventListener("afterprint", afterPrint);
   };
-
 }, []);
+
+/* ✅ ADD HERE */
+const cleanPrintValue = (val: any) => {
+  if (
+    val === undefined ||
+    val === null ||
+    val === "" ||
+    val === "Select" ||
+    val === "Invalid Date"
+  ) {
+    return "";
+  }
+  return val;
+};
 
   if (!template) return null;
   if (!template.fields?.length) return null;
@@ -59,6 +77,8 @@ const formatDateTime = (value: any) => {
   if (!value) return "";
 
   const date = new Date(value);
+  
+   if (isNaN(date.getTime())) return ""; 
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -75,6 +95,8 @@ const formatDate = (value: any) => {
   if (!value) return "";
 
   const d = new Date(value);
+  
+ if (isNaN(d.getTime())) return "";
 
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
@@ -85,11 +107,36 @@ const formatDate = (value: any) => {
 const formatTime = (value: any) => {
   if (!value) return "";
 
+  // ✅ Handle "03:25 PM" manually
+if (
+  typeof value === "string" &&
+  (value.includes("AM") || value.includes("PM"))
+) {
+  return value;
+}
+
+// ✅ Handle "HH:mm" (e.g. "15:25")
+if (typeof value === "string" && /^\d{2}:\d{2}$/.test(value)) {
+  const [h, m] = value.split(":").map(Number);
+
+  const d = new Date();
+  d.setHours(h, m, 0, 0);
+
   return new Intl.DateTimeFormat("en-US", {
     hour: "2-digit",
     minute: "2-digit",
     hour12: true
-  }).format(new Date(value));
+  }).format(d);
+}
+  const d = new Date(value);
+
+  if (isNaN(d.getTime())) return "";
+
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  }).format(d);
 };
 
 const resolveSystemValue = (bindingKey: string) => {
@@ -99,119 +146,48 @@ const resolveSystemValue = (bindingKey: string) => {
   const normalize = (v: string) =>
     v?.toString().toLowerCase().replace(/[^a-z0-9]/g, "");
 
-  const normalizedSystem = Object.keys(systemData || {}).reduce((acc, key) => {
-    acc[normalize(key)] = systemData[key];
-    return acc;
-  }, {} as Record<string, any>);
+  const normalizedSystem: Record<string, any> = {};
 
-  /* ==============================
-     SPECIAL CALCULATED FIELDS
-  ============================== */
-
-if (bindingKey === "patient_name") {
-
-  const last =
-    systemData.last_name ||
-    systemData.lastname ||
-    systemData.lastName ||
-    "";
-
-  const first =
-    systemData.first_name ||
-    systemData.firstname ||
-    systemData.firstName ||
-    "";
-
-  const middle =
-    systemData.middle_name ||
-    systemData.middlename ||
-    systemData.middleName ||
-    "";
-
-  return [last, first, middle].filter(Boolean).join(", ");
-}
-
-  if (bindingKey === "age") {
-
-    if (!systemData.birthdate) return "";
-
-    const birth = new Date(systemData.birthdate);
-    const today = new Date();
-
-    const years = today.getFullYear() - birth.getFullYear();
-    const months = today.getMonth() - birth.getMonth();
-    const days = today.getDate() - birth.getDate();
-
-    return `${years}Y ${Math.abs(months)}M ${Math.abs(days)}D`;
-  }
-
-  if (bindingKey === "address") {
-    return [
-      systemData.barangay,
-      systemData.town_city,
-      systemData.province
-    ].filter(Boolean).join(", ");
-  }
-
-  /* ==============================
-     LOOKUP FROM SYSTEM REGISTRY
-  ============================== */
+  Object.keys(systemData || {}).forEach((key) => {
+    normalizedSystem[normalize(key)] = systemData[key];
+  });
 
   for (const group of SYSTEM_FIELD_REGISTRY) {
 
- const found = group.fields.find(
-  f => normalize(f.key) === normalize(bindingKey)
-);
-    if (!found) continue;
+    const field = group.fields.find(
+      f => normalize(f.key) === normalize(bindingKey)
+    );
 
-    /* Single Column Field */
-    if (found.column) {
+    if (!field) continue;
 
-      const key = normalize(found.column);
-let value = normalizedSystem[key];
-
-// fallback to binding column name
-if (value === undefined) {
-
-  const fallbackKey = normalize(bindingKey.split(".").pop() || "");
-  value = normalizedSystem[fallbackKey];
-
-}
-
-if (value === undefined || value === null) return "";
-
-if (found.format === "datetime") return formatDateTime(value);
-if (found.format === "date") return formatDate(value);
-if (found.format === "time") return formatTime(value);
-
-return value;
-    }
-
-    /* Multi Column Field (Full Name etc) */
-    if (found.columns) {
-
-      return found.columns
+    if (field.columns) {
+      return field.columns
         .map(col => normalizedSystem[normalize(col)] ?? "")
         .filter(Boolean)
-        .join(" ");
+        .join(", ");
+    }
+
+    if (field.column) {
+
+      const value = normalizedSystem[normalize(field.column)];
+
+      if (!value) return "";
+
+      if (field.format === "datetime") return formatDateTime(value);
+      if (field.format === "date") return formatDate(value);
+      if (field.format === "time") return formatTime(value);
+
+      return value;
     }
 
   }
 
-  /* ==============================
-     DIRECT COLUMN FALLBACK
-  ============================== */
+  const fallback = bindingKey.split(".").pop();
 
-  const columnKey = bindingKey.split(".").pop();
-  if (!columnKey) return "";
+  if (!fallback) return "";
 
-  const normalizedColumn = normalize(columnKey);
+  return normalizedSystem[normalize(fallback)] ?? "";
 
-  if (normalizedSystem[normalizedColumn] !== undefined) {
-    return normalizedSystem[normalizedColumn];
-  }
-
-  return "";
 };
   /* =====================================
      PAGE FILTER
@@ -292,8 +268,11 @@ template.fields.forEach((field: any) => {
 
         const isDisabled = readOnly || isSystemField;
 
+console.log("FIELD BINDING:", field.systemBinding);
 const value = isSystemField
-  ? resolveSystemValue(field.systemBinding)
+  ? (field.systemBinding
+      ? resolveSystemValue(field.systemBinding)
+      : "")
   : formData[field.fieldName] ?? "";
   
     const showError =
@@ -350,9 +329,11 @@ const style = {
 
   isPrint ? (
 
-    <div style={fontStyle}>
-      {value}
-    </div>
+
+
+  <div style={fontStyle}>
+    {cleanPrintValue(value)}
+  </div>
 
   ) : (
 
@@ -379,11 +360,11 @@ const style = {
 
  {field.type === "textarea" && (
 
-  isPrint ? (
+isPrint ? (
 
-    <div style={fontStyle}>
-      {value}
-    </div>
+  <div style={fontStyle}>
+    {cleanPrintValue(value)}
+  </div>
 
   ) : (
 
@@ -421,9 +402,9 @@ showError ? "border-red-500" : ""
   const localISOTime = local.toISOString().slice(11,16);
   const localISODateTime = local.toISOString().slice(0,16);
 
- const autoValue = (() => {
+const autoValue = value || (() => {
 
-  if (!field.autoNow) return value;
+  if (!field.autoNow) return "";
 
   if (field.dateMode === "time") return localISOTime;
   if (field.dateMode === "datetime") return localISODateTime;
@@ -431,22 +412,24 @@ showError ? "border-red-500" : ""
 
 })();
 
-  return isPrint ? (
+return isPrint ? (() => {
 
-<div style={fontStyle}>
-{
-  autoValue
-    ? field.dateMode === "time"
-      ? formatTime(autoValue)
-      : field.dateMode === "datetime"
-      ? formatDateTime(autoValue)
-      : formatDate(autoValue)
-    : ""
-}
-</div>
+  const formatted =
+    autoValue
+      ? field.dateMode === "time"
+        ? formatTime(autoValue)
+        : field.dateMode === "datetime"
+        ? formatDateTime(autoValue)
+        : formatDate(autoValue)
+      : "";
 
-  ) : (
+  return (
+    <div style={fontStyle}>
+      {cleanPrintValue(formatted)}
+    </div>
+  );
 
+})() : (
     <input
       type={getType()}
       value={autoValue}
@@ -478,11 +461,11 @@ showError ? "border-red-500" : ""
 
 {field.type === "select" && (
 
-  isPrint ? (
+isPrint ? (
 
-    <div style={fontStyle}>
-      {value}
-    </div>
+  <div style={fontStyle}>
+    {cleanPrintValue(value)}
+  </div>
 
   ) : (
 
@@ -515,27 +498,25 @@ showError ? "border-red-500" : ""
             {/* CHECKBOX */}
 
 {field.type === "checkbox" && (
+  <>
+    {!isPrint && (
+      <input
+        type="checkbox"
+        checked={isSystemField ? Boolean(value) : formData[field.fieldName] || false}
+        disabled={isDisabled}
+        onChange={(e) => {
+          if (isDisabled) return;
+          onChange(field.fieldName, e.target.checked);
+        }}
+      />
+    )}
 
-  isPrint ? (
-
-    <div style={fontStyle}>
-      {(formData[field.fieldName] || false) ? "☑" : "☐"}
-    </div>
-
-  ) : (
-
-    <input
-      type="checkbox"
-      checked={isSystemField ? Boolean(value) : formData[field.fieldName] || false}
-      disabled={isDisabled}
-      onChange={(e) => {
-        if (isDisabled) return;
-        onChange(field.fieldName, e.target.checked);
-      }}
-    />
-
-  )
-
+    {isPrint && (
+      <div style={fontStyle}>
+        {(formData[field.fieldName] || false) ? "☑" : ""}
+      </div>
+    )}
+  </>
 )}
 
             {/* LIST */}
@@ -569,7 +550,7 @@ showError ? "border-red-500" : ""
 
   {isPrint ? (
     <span>
-      {selected.includes(opt) ? "☑" : "☐"}
+      {selected.includes(opt) ? "☑" : ""}
     </span>
   ) : (
     <input
@@ -626,7 +607,7 @@ showError ? "border-red-500" : ""
 
     {isPrint ? (
       <span>
-        {value === opt ? "◉" : "○"}
+        {value === opt ? "◉" : ""}
       </span>
     ) : (
       <input
@@ -657,7 +638,6 @@ showError ? "border-red-500" : ""
                 type="text"
                 readOnly
                 value={computedFormulas[field.id] || ""}
-key={JSON.stringify(formData)}
                 style={fontStyle}
                 className={`${commonInputClass} bg-slate-100`}
               />

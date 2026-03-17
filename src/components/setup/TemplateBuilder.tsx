@@ -390,10 +390,10 @@ const FIELD_TYPES = [
     { type: "list", label: "List", icon: "≡" },
   { type: "date", label: "Date / Time", icon: "📅" },
   { type: "radio_button", label: "Radio Button", icon: "⏺" },
-  { type: "formula", label: "Formula", icon: "%" },
-  { type: "image", label: "Image", icon: "🖼" },
-  { type: "system_user", label: "System User", icon: "👤" }
+  { type: "formula", label: "Formula", icon: "%" }
 ];
+
+  {/*   { type: "system_user", label: "System User", icon: "👤" }    { type: "image", label: "Image", icon: "🖼" },*/}
 
 const isDuplicateLabel = (label: string, currentId?: string) => {
 
@@ -1835,7 +1835,7 @@ onClick={(e) => {
   <div className="w-full h-full bg-slate-100 border border-dashed border-slate-300 pointer-events-none" />
 )}
 
-{/* SYSTEM USER (Builder Mode) */}
+{/* SYSTEM USER (Builder Mode)
 {field.type === "system_user" && (
   <div
     style={{
@@ -1858,7 +1858,7 @@ onClick={(e) => {
   >
     Current User Name
   </div>
-)}
+)} */}
 
       {/* LABEL */}
       {field.type === "label" && (

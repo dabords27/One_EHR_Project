@@ -105,24 +105,24 @@ exports.getTemplates = async (req, res) => {
   try {
 
     const pool = req.app.locals.pool;
-    const { dept_code} = req.query;
+    const { department_id } = req.query;
 
     const request = pool.request();
 
-let query = `
-  SELECT DISTINCT t.*
-  FROM dbo.CustomFormTemplates t
-  LEFT JOIN dbo.CustomFormTemplateDepartments td
-    ON t.template_id = td.template_id
-  LEFT JOIN dbo.departments d
-    ON td.department_id = d.auto_id
+    let query = `
+      SELECT DISTINCT t.*
+      FROM dbo.CustomFormTemplates t
+      INNER JOIN dbo.CustomFormTemplateDepartments td
+        ON t.template_id = td.template_id
+      WHERE t.is_active = 1
+    `;
 
-`;
+    if (department_id) {
+      request.input("department_id", sql.Int, department_id);
+      query += ` AND td.department_id = @department_id`;
+    }
 
-if (dept_code) {
-  request.input("dept_code", sql.VarChar(50), dept_code);
-  query += ` AND d.dept_code = @dept_code`;
-}
+    query += ` ORDER BY t.template_name`;
 
     const result = await request.query(query);
 
@@ -138,7 +138,6 @@ if (dept_code) {
 
   }
 };
-
 
 /* =====================================================
    UPDATE TEMPLATE

@@ -386,13 +386,23 @@ exports.getFormById = async (req, res) => {
     const result = await pool.request()
       .input("formId", sql.Int, id)
  .query(`
-  SELECT 
-    f.*,
-    p.*
-  FROM dbo.PatientCustomForms f
-  LEFT JOIN dbo.PatientRegistry_Local p
-    ON f.patient_id = p.RegistryTrackingNo
-  WHERE f.patient_form_id = @formId
+SELECT 
+  f.*,
+
+  p.RegistryTrackingNo as case_id,
+  p.MRN as mrn,
+  p.Firstname as first_name,
+  p.Middlename as middle_name,
+  p.Lastname as last_name,
+  p.Gender as sex,
+  p.Birthdate as birthdate,
+  p.RoomBedNo as room_no,
+  p.AdmissionDateTime as date_admitted
+
+FROM dbo.PatientCustomForms f
+LEFT JOIN dbo.PatientRegistry_Local p
+  ON f.patient_id = p.RegistryTrackingNo
+WHERE f.patient_form_id = @formId
 `);
 
     const record = result.recordset[0];

@@ -39,9 +39,17 @@ exports.getPatientForm = async (req, res) => {
       console.warn("Invalid filled_data JSON");
     }
 
+const {
+  patient_form_id,
+  template_id,
+  template_snapshot,
+  filled_data,
+  ...patientData
+} = record;
+
 res.json({
   template,
-  patient: record,
+  patient: patientData,
   filled_data: filledData
 });
 
